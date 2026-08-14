@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RingBuffer, SmoothGain, applyGain, dbToGain, devDuckDecision } from "../extension/src/audio/dsp";
+import { StableAudioProcessor } from "../extension/src/audio/worklet";
 
 describe("audio DSP safety", () => {
   it("converts invalid or excessive dB to finite safe gain", () => {
@@ -15,9 +16,22 @@ describe("audio DSP safety", () => {
     const bypassSamples = applyGain(input, { targetGain: 1, enabled: false, engine: "bypass" }, smoother);
     expect(protectedSamples.every(Number.isFinite)).toBe(true); expect(bypassSamples[0]).toBeLessThan(0.8); expect(bypassSamples[15]).toBeLessThanOrEqual(0.8);
   });
+  it("returns cleanly to unity on bypass with bounded sample-to-sample changes", () => {
+    const processor = new StableAudioProcessor(1000, 4, 4);
+    const input = new Float32Array(64).fill(0.75);
+    processor.process(input, { targetGain: 0.05, enabled: true, engine: "separator" });
+    const output = processor.process(input, { targetGain: 1, enabled: false, engine: "bypass" });
+    const jumps = output.slice(1).map((sample, i) => Math.abs(sample - output[i]));
+    expect(Math.max(...jumps)).toBeLessThan(0.2);
+    expect(output[output.length - 1]).toBeGreaterThan(output[0]);
+    expect(processor.metrics.processedFrames).toBe(2);
+  });
   it("limits stress fixture and keeps dev duck explicitly benchmark-only", () => {
     const output = applyGain(new Float32Array([Infinity, -Infinity, 4, -4]), devDuckDecision(true, 12), new SmoothGain(1, 1));
     expect([...output].every(Number.isFinite)).toBe(true); expect([...output].every((sample) => Math.abs(sample) <= 1)).toBe(true);
-    expect(devDuckDecision(true, 8).engine).toBe("duck");
+    const fallback = devDuckDecision(true, 8);
+    expect(fallback.engine).toBe("duck");
+    expect(fallback.engine).not.toBe("separator");
+    expect(fallback.targetGain).toBeLessThan(1);
   });
 });
