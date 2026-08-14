@@ -7,7 +7,7 @@ const sendStatus = (status: unknown) => chrome.runtime.sendMessage({ type: "ENGI
 async function ensureOffscreen(): Promise<void> {
   if (await chrome.offscreen.hasDocument()) return;
   creatingOffscreen ??= chrome.offscreen.createDocument({
-    url: "src/offscreen/offscreen.html",
+    url: "offscreen/offscreen.html",
     // @types/chrome lags the MV3 reason enum; Chrome supports AUDIO_PLAYBACK.
     reasons: ["AUDIO_PLAYBACK" as chrome.offscreen.Reason],
     justification: "Route captured tab audio back to the user while processing stays offscreen.",
