@@ -3,7 +3,7 @@
   "name": "AudioShield",
   "version": "0.1.0",
   "description": "Local sensory audio protection for browser tabs.",
-  "permissions": ["tabCapture", "storage"],
+  "permissions": ["activeTab", "offscreen", "storage", "tabCapture"],
   "action": { "default_title": "AudioShield" },
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "side-panel.html" }

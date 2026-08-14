@@ -8,7 +8,8 @@ async function ensureOffscreen(): Promise<void> {
   if (await chrome.offscreen.hasDocument()) return;
   creatingOffscreen ??= chrome.offscreen.createDocument({
     url: "src/offscreen/offscreen.html",
-    reasons: ["AUDIO_PLAYBACK"],
+    // @types/chrome lags the MV3 reason enum; Chrome supports AUDIO_PLAYBACK.
+    reasons: ["AUDIO_PLAYBACK" as chrome.offscreen.Reason],
     justification: "Route captured tab audio back to the user while processing stays offscreen.",
   }).finally(() => { creatingOffscreen = undefined; });
   await creatingOffscreen;
@@ -18,7 +19,12 @@ export async function startProtection(tabId: number): Promise<void> {
   if (session?.tabId === tabId) return;
   if (session) await stopProtection(session.tabId);
   try {
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+    const streamId = await new Promise<string>((resolve, reject) => {
+      chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(id);
+      });
+    });
     await ensureOffscreen();
     session = { tabId, streamId };
     await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId });
