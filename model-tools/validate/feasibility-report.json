@@ -1,0 +1,18 @@
+{
+  "verdict": "RED",
+  "gate": "Worker 3 target separator technical kill gate",
+  "evidence": {
+    "browserCompatibleInference": "NOT_RUN",
+    "overlapAttenuation": "NOT_MEASURED",
+    "speechPreservation": "NOT_MEASURED",
+    "baselineComparison": "NOT_MEASURED",
+    "webgpu": "NOT_RUN",
+    "wasm": "NOT_RUN"
+  },
+  "blockers": [
+    "No Semantic Hearing checkpoint, ONNX export, or ONNX Runtime Web dependency exists in the scaffold.",
+    "No speech+dishes or speech+alarm stems exist, so overlap metrics cannot be measured honestly.",
+    "No browser harness exists to repeat WebGPU/WASM inference or measure real-time latency."
+  ],
+  "decision": "Do not claim selective separation or implement whole-window ducking as a separator."
+}
