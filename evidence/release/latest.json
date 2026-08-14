@@ -1,0 +1,29 @@
+{
+  "head": "8ae4a9e9059a609b3f5b1ccd801a5696de5c53ec",
+  "browserSmoke": "UNVERIFIED",
+  "scope": "evidence-only",
+  "gates": {
+    "build": "PASS",
+    "typecheck": "PASS",
+    "tests": { "status": "PASS", "testFiles": 8, "tests": 23 },
+    "diffCheck": "PASS",
+    "npmAudit": { "status": "FAIL", "vulnerabilities": 5, "severity": { "moderate": 3, "high": 1, "critical": 1 } }
+  },
+  "benchmark": {
+    "separatorAdapter": "NOT_RUN",
+    "detection": "NOT_RUN",
+    "selective": "NOT_RUN",
+    "latency": "NOT_RUN",
+    "reliability": "NOT_RUN",
+    "naiveWholeWindowDuck": { "status": "MEASURED", "overlapCount": 12, "speechLossDbMean": 20.000000000485855 }
+  },
+  "artifacts": [
+    "dist/manifest.json", "dist/background.js", "dist/background/service-worker.js", "dist/side-panel.html",
+    "dist/offscreen/offscreen.html", "dist/offscreen/offscreen.js", "dist/offscreen/runtime.js", "dist/ui/main.js",
+    "dist/ml/separator/index.js", "dist/ml/separator/unavailable.js", "dist/policy/trigger.js",
+    "dist/storage/runtime.js", "dist/storage/settings.js", "dist/shared/"
+  ],
+  "permissions": ["activeTab", "offscreen", "storage", "tabCapture"],
+  "networkRawAudioScan": { "networkApis": "NONE_FOUND", "rawAudioPersistence": "NONE_FOUND" },
+  "status": "AUTOMATED_EVIDENCE_PASS_WITH_NPM_AUDIT_FAILURE_BROWSER_UNVERIFIED"
+}
