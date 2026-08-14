@@ -7,6 +7,7 @@ export type EngineStatus =
   | { state: "loading-models" }
   | { state: "capturing"; tabId: number }
   | { state: "protecting"; tabId: number; engine: "separator" | "duck" }
+  | { state: "unavailable"; tabId: number; code: "SEPARATOR_UNAVAILABLE" }
   | { state: "bypassed"; tabId: number }
   | { state: "error"; code: string };
 

@@ -22,7 +22,7 @@ describe("offscreen tab playback", () => {
     expect(source.disconnect).toHaveBeenCalledTimes(1);
     expect(stream.track.stop).toHaveBeenCalledTimes(1);
     expect(context.close).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(["capturing", "idle"]);
+    expect(statuses).toEqual(["unavailable", "idle"]);
   });
 
   it("fails closed and reports capture failure without retrying", async () => {
@@ -47,6 +47,20 @@ describe("offscreen tab playback", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(stream.track.stop).toHaveBeenCalledTimes(1);
     expect(context.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports bypass without adding a second playback route", async () => {
+    const stream = fakeStream();
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const context = { destination: {}, createMediaStreamSource: vi.fn(() => source), resume: vi.fn(async () => undefined), close: vi.fn(async () => undefined) };
+    const runtime = createAudioRuntime(vi.fn(async () => stream), () => context);
+    const statuses: string[] = [];
+    runtime.onStatus((status) => statuses.push(status.state));
+    await runtime.start("bypass-stream");
+    await runtime.setBypass(true);
+    await runtime.setBypass(false);
+    expect(source.connect).toHaveBeenCalledTimes(1);
+    expect(statuses).toEqual(["unavailable", "bypassed", "capturing"]);
   });
 });
 

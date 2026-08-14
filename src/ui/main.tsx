@@ -7,6 +7,7 @@ import "./styles.css";
 export interface UiRuntime {
   send(message: RuntimeMessage): void;
   subscribe(listener: (message: RuntimeMessage) => void): () => void;
+  activeTabId?(): Promise<number | null>;
 }
 
 export const labels: Record<TriggerId, { name: string; icon: string; hint: string }> = {
@@ -29,10 +30,12 @@ const chromeRuntime: UiRuntime = {
     chrome.runtime.onMessage.addListener(handler);
     return () => chrome.runtime.onMessage.removeListener(handler);
   },
+  activeTabId: async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id ?? null,
 };
 
 function statusCopy(status: EngineStatus, protectedTab: boolean) {
   if (status.state === "error") return { title: "Needs attention", detail: status.code };
+  if (status.state === "unavailable") return { title: "Protection unavailable", detail: "Selective separation is unavailable; audio remains unchanged" };
   if (status.state === "loading-models") return { title: "Getting ready", detail: "Preparing local protection" };
   if (status.state === "bypassed") return { title: "Bypass on", detail: "Protection paused for this tab" };
   if (protectedTab) return { title: "Protecting this tab", detail: "Listening locally for your selected triggers" };
@@ -56,6 +59,7 @@ function EventRow({ event }: { event: SensoryEvent }) {
 
 export function App({ runtime = chromeRuntime }: { runtime?: UiRuntime }) {
   const [protectedTab, setProtectedTab] = useState(false);
+  const [activeTabId, setActiveTabId] = useState<number | null>(null);
   const [bypass, setBypass] = useState(false);
   const [rules, setRules] = useState(initialRules);
   const [strength, setStrength] = useState(65);
@@ -74,7 +78,8 @@ export function App({ runtime = chromeRuntime }: { runtime?: UiRuntime }) {
   const toggleProtection = () => {
     const next = !protectedTab;
     setProtectedTab(next);
-    runtime.send(next ? { type: "PROTECTION_START", tabId: 0 } : { type: "PROTECTION_STOP", tabId: 0 });
+    if (!next) { if (activeTabId !== null) runtime.send({ type: "PROTECTION_STOP", tabId: activeTabId }); return; }
+    void runtime.activeTabId?.().then((tabId) => { if (tabId !== null && tabId !== undefined) { setActiveTabId(tabId); runtime.send({ type: "PROTECTION_START", tabId }); } });
   };
   const toggleRule = (id: TriggerId) => setRules((current) => current.map((rule) => rule.id === id ? { ...rule, enabled: !rule.enabled } : rule));
   const updateStrength = (id: TriggerId, value: number) => setRules((current) => current.map((rule) => rule.id === id ? { ...rule, strength: value } : rule));

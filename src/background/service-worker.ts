@@ -1,6 +1,7 @@
 type Session = { tabId: number; streamId: string };
 let session: Session | undefined;
 let creatingOffscreen: Promise<void> | undefined;
+let bypassed = false;
 
 const sendStatus = (status: unknown) => chrome.runtime.sendMessage({ type: "ENGINE_STATUS", status }).catch(() => undefined);
 
@@ -28,6 +29,7 @@ export async function startProtection(tabId: number): Promise<void> {
     await ensureOffscreen();
     session = { tabId, streamId };
     await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId });
+    if (bypassed) await chrome.runtime.sendMessage({ type: "BYPASS_SET", enabled: true });
     await sendStatus({ state: "capturing", tabId });
   } catch {
     session = undefined;
@@ -46,8 +48,17 @@ export async function stopProtection(tabId?: number): Promise<void> {
 chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number }) => {
   if (message.type === "PROTECTION_START" && message.tabId !== undefined) void startProtection(message.tabId);
   if (message.type === "PROTECTION_STOP") void stopProtection(message.tabId);
+  if (message.type === "BYPASS_SET" && typeof (message as { enabled?: unknown }).enabled === "boolean") {
+    bypassed = Boolean((message as unknown as { enabled: boolean }).enabled);
+    void chrome.runtime.sendMessage({ type: "BYPASS_SET", enabled: bypassed }).catch(() => undefined);
+    void sendStatus(bypassed ? { state: "bypassed", tabId: session?.tabId ?? -1 } : { state: "capturing", tabId: session?.tabId ?? -1 });
+  }
 });
 chrome.tabs.onRemoved.addListener((tabId) => void stopProtection(tabId));
-chrome.runtime.onMessage.addListener((message: { type: string; status?: { state: string } }) => {
-  if (message.type === "ENGINE_STATUS" && message.status?.state === "idle") session = undefined;
+chrome.runtime.onMessage.addListener((message: { type: string; status?: { state: string; code?: string } }) => {
+  if (message.type !== "ENGINE_STATUS" || !message.status) return;
+  if (message.status.state === "idle") session = undefined;
+  if (message.status.state === "unavailable") {
+    void sendStatus({ state: "unavailable", tabId: session?.tabId ?? -1, code: "SEPARATOR_UNAVAILABLE" });
+  }
 });

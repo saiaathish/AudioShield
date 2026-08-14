@@ -1,11 +1,14 @@
 export type OffscreenStatus =
   | { state: "capturing" }
   | { state: "idle" }
+  | { state: "unavailable"; code: "SEPARATOR_UNAVAILABLE" }
+  | { state: "bypassed" }
   | { state: "error"; code: string };
 
 export interface AudioRuntime {
   start(streamId: string): Promise<void>;
   stop(): Promise<void>;
+  setBypass(enabled: boolean): Promise<void>;
   onStatus(listener: (status: OffscreenStatus) => void): void;
 }
 
@@ -25,6 +28,7 @@ export function createAudioRuntime(
   let context: AudioContextLike | undefined;
   let statusListener: ((status: OffscreenStatus) => void) | undefined;
   let stopping = false;
+  let bypassed = false;
 
   const emit = (status: OffscreenStatus) => statusListener?.(status);
   const cleanup = async () => {
@@ -41,6 +45,10 @@ export function createAudioRuntime(
 
   return {
     onStatus(listener) { statusListener = listener; },
+    async setBypass(enabled) {
+      bypassed = enabled;
+      if (stream) emit(enabled ? { state: "bypassed" } : { state: "capturing" });
+    },
     async start(nextStreamId) {
       if (stream || stopping) return;
       try {
@@ -52,7 +60,9 @@ export function createAudioRuntime(
         source = context.createMediaStreamSource(stream);
         source.connect(context.destination); // Exactly one output route.
         await context.resume();
-        emit({ state: "capturing" });
+        // UnavailableSeparator is intentionally fail-closed: playback remains one
+        // pass-through route, while the UI receives no false selective claim.
+        emit(bypassed ? { state: "bypassed" } : { state: "unavailable", code: "SEPARATOR_UNAVAILABLE" });
       } catch {
         await cleanup();
         emit({ state: "error", code: "CAPTURE_START_FAILED" });
@@ -65,4 +75,3 @@ export function createAudioRuntime(
     },
   };
 }
-
