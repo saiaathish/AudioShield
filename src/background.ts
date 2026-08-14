@@ -1,2 +1,2 @@
-// Runtime entrypoint reserved for Worker 1 capture lifecycle.
-export {};
+// Manifest entrypoint; lifecycle implementation stays isolated under background/.
+import "./background/service-worker";
