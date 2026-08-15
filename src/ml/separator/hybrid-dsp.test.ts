@@ -6,8 +6,14 @@ describe("HybridDspSeparator", () => {
     const engine = new HybridDspSeparator(); await engine.initialize();
     const input = new Float32Array([0, 0.5, -0.5, 0.2]);
     const result = await engine.process({ frame: { sampleRate: 16_000, channels: 1, samples: input }, targetClassId: "dishes" });
-    expect(result.backend).toBe("dsp-hybrid"); expect(result.frame.samples).not.toBe(input); expect([...input]).toEqual(Array.from(new Float32Array([0, 0.5, -0.5, 0.2])));
+    expect(result.backend).toBe("dsp-hybrid"); expect(result.frame.samples).not.toBe(input); expect([...input]).toEqual(Array.from(new Float32Array([0, 0.5, -0.5, 0.2]))); expect(result.targetAttenuationDb).toBe(0); expect(result.speechPreservationDb).toBe(0); expect(result.diagnostics?.metricsAvailable).toBe(false);
     expect([...result.frame.samples].every(Number.isFinite)).toBe(true);
+  });
+  it("masks deterministic high-band transients while retaining low-band speech", async () => {
+    const engine = new HybridDspSeparator(); await engine.initialize(); const input = new Float32Array(128);
+    for (let i = 0; i < input.length; i++) input[i] = .2 * Math.sin(2 * Math.PI * 2 * i / 64) + (i % 3 === 0 ? .45 : 0);
+    const result = await engine.process({ frame: { sampleRate: 16_000, channels: 1, samples: input }, targetClassId: "dishes" });
+    expect(result.frame.samples).not.toEqual(input); expect(result.frame.samples.every(Number.isFinite)).toBe(true);
   });
   it("bypasses unsupported targets and oversized frames as identity copies", async () => {
     const engine = new HybridDspSeparator(); await engine.initialize();

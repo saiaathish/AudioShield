@@ -13,6 +13,7 @@ export interface SeparatorResult {
   readonly targetAttenuationDb: number;
   readonly speechPreservationDb: number;
   readonly latencyMs: number;
+  readonly diagnostics?: { readonly metricsAvailable: false; readonly method: "dsp-hybrid"; readonly reason: "no-reference-stems" };
 }
 
 export interface SeparatorEngine {
