@@ -1,6 +1,7 @@
 # AudioShield release evidence
 
-- HEAD: `c2e30aed3360d563c9402119d4bfb0a732dc116c` (audited pre-ledger commit)
+- Source head: `c2ba217db2c59aa6578dbfc41405592a0805e9f8`
+- Evidence head: `c2e30aed3360d563c9402119d4bfb0a732dc116c` (evidence follows source)
 - Browser smoke: **UNVERIFIED**
 - Browser capability blocker: `AO_BROWSER_CAPABILITY` not set; Chrome checks not run.
 - Scope: evidence only; no production source or prior test-results evidence modified.
@@ -15,7 +16,7 @@
 
 ## Benchmark
 
-- Hybrid DSP: **YELLOW** — synthetic/offline benchmark only; runtime diagnostics report `metricsAvailable=false`; browser real-time behavior **UNVERIFIED**.
+- Hybrid DSP: **YELLOW** — runtime present; diagnostics report `metricsAvailable=false`; benchmark is synthetic/offline only; browser real-time behavior **UNVERIFIED**.
 
 From `bench/results/latest.json`:
 

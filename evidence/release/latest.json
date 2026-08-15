@@ -1,5 +1,6 @@
 {
-  "head": "c2e30aed3360d563c9402119d4bfb0a732dc116c",
+  "sourceHead": "c2ba217db2c59aa6578dbfc41405592a0805e9f8",
+  "evidenceHead": "c2e30aed3360d563c9402119d4bfb0a732dc116c",
   "browserSmoke": "UNVERIFIED",
   "browserCapability": "UNAVAILABLE: AO_BROWSER_CAPABILITY not set",
   "scope": "evidence-only",
@@ -11,7 +12,7 @@
     "npmAudit": { "status": "FAIL", "vulnerabilities": 5, "severity": { "moderate": 3, "high": 1, "critical": 1 } }
   },
   "benchmark": {
-    "hybridDsp": { "status": "YELLOW", "scope": "synthetic offline benchmark only", "metricsAvailableInRuntime": false, "browserRealtime": "UNVERIFIED" },
+    "hybridDsp": { "status": "YELLOW", "runtime": "PRESENT", "scope": "synthetic offline benchmark only", "metricsAvailableInRuntime": false, "browserRealtime": "UNVERIFIED" },
     "separatorAdapter": "NOT_RUN",
     "detection": "NOT_RUN",
     "selective": "NOT_RUN",
@@ -27,5 +28,5 @@
   ],
   "permissions": ["activeTab", "offscreen", "storage", "tabCapture"],
   "networkRawAudioScan": { "networkApis": "NONE_FOUND", "rawAudioPersistence": "NONE_FOUND" },
-  "status": "AUTOMATED_EVIDENCE_PASS_WITH_NPM_AUDIT_FAILURE_BROWSER_UNVERIFIED"
+  "status": "HYBRID_DSP_RUNTIME_PRESENT_DIAGNOSTICS_UNAVAILABLE_SYNTHETIC_OFFLINE_BROWSER_UNVERIFIED"
 }
