@@ -1,11 +1,12 @@
 {
-  "head": "4e1f58b8ba91060eaeb68bb34b0b6b188b6f3a46",
+  "head": "c2e30aed3360d563c9402119d4bfb0a732dc116c",
   "browserSmoke": "UNVERIFIED",
+  "browserCapability": "UNAVAILABLE: AO_BROWSER_CAPABILITY not set",
   "scope": "evidence-only",
   "gates": {
     "build": "PASS",
     "typecheck": "PASS",
-    "tests": { "status": "PASS", "testFiles": 8, "tests": 23 },
+    "tests": { "status": "PASS", "testFiles": 9, "tests": 29 },
     "diffCheck": "PASS",
     "npmAudit": { "status": "FAIL", "vulnerabilities": 5, "severity": { "moderate": 3, "high": 1, "critical": 1 } }
   },

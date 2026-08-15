@@ -1,14 +1,15 @@
 # AudioShield release evidence
 
-- HEAD: `4e1f58b8ba91060eaeb68bb34b0b6b188b6f3a46` (audited pre-ledger commit)
+- HEAD: `c2e30aed3360d563c9402119d4bfb0a732dc116c` (audited pre-ledger commit)
 - Browser smoke: **UNVERIFIED**
+- Browser capability blocker: `AO_BROWSER_CAPABILITY` not set; Chrome checks not run.
 - Scope: evidence only; no production source or prior test-results evidence modified.
 
 ## Gates
 
 - `npm run build`: PASS
 - `npm run typecheck`: PASS
-- `npm test -- --run`: PASS — 8 files, 23 tests
+- `npm test -- --run`: PASS — 9 files, 29 tests
 - `git diff --check`: PASS
 - `npm audit`: FAIL — 5 vulnerabilities (3 moderate, 1 high, 1 critical); remediation requires breaking `--force` upgrade.
 
