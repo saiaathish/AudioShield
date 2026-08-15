@@ -1,0 +1,31 @@
+{
+  "head": "8d3e565fb5d2c57fff1329c69621eff74189aa62",
+  "headVerified": true,
+  "build": {
+    "command": "npm run build",
+    "status": "PASS"
+  },
+  "browser": {
+    "capability": "UNVERIFIED",
+    "blocker": "ao browser refused all commands: AO_BROWSER_CAPABILITY is not set",
+    "networkCapture": "UNVERIFIED",
+    "networkCaptureStarted": false
+  },
+  "checks": [
+    {"id":"unpacked-install","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"media-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"protect-current-tab","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"popup-or-side-panel-close","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"continued-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"bypass","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"reopen","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"tab-reload","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"recovery","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"stop","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
+    {"id":"duplicate-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"}
+  ],
+  "console": "UNVERIFIED",
+  "errors": "UNVERIFIED",
+  "screenshots": "UNVERIFIED",
+  "sourceModified": false
+}
