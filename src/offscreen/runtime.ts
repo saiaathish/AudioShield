@@ -76,7 +76,9 @@ export function createAudioRuntime(
           processor.onaudioprocess = (event) => {
             const input = event.inputBuffer.getChannelData(0);
             const output = event.outputBuffer.getChannelData(0);
-            void separator?.process({ frame: { sampleRate: event.inputBuffer.sampleRate, channels: event.inputBuffer.numberOfChannels, samples: input }, targetClassId: "dishes" }).then((result) => output.set(result.frame.samples));
+            const request = { frame: { sampleRate: event.inputBuffer.sampleRate, channels: event.inputBuffer.numberOfChannels, samples: input }, targetClassId: "dishes" };
+            const result = separator?.processSync?.(request);
+            if (result) output.set(result.frame.samples);
           };
           source.connect(processor);
           processor.connect(context.destination); // Exactly one source -> processing -> destination route.

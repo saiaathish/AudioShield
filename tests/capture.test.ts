@@ -75,7 +75,18 @@ describe("offscreen tab playback", () => {
     expect(source.connect).toHaveBeenCalledWith(processor);
     expect(processor.connect).toHaveBeenCalledWith(context.destination);
     expect(statuses).toEqual(["protecting"]);
+    const speech = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 2 * index / 64) * 0.4);
+    const transient = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 20 * index / 64) * 0.4);
+    const run = (input: Float32Array) => {
+      const output = new Float32Array(input.length);
+      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input, sampleRate: 16_000, numberOfChannels: 1 }, outputBuffer: { getChannelData: () => output, numberOfChannels: 1 } });
+      return output;
+    };
+    expect(run(speech)).toEqual(speech);
+    expect(run(transient)).not.toEqual(transient);
     await runtime.stop();
+    expect(source.disconnect).toHaveBeenCalledTimes(1);
+    expect(processor.disconnect).toHaveBeenCalledTimes(1);
   });
 });
 

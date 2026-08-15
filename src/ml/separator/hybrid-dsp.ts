@@ -8,6 +8,9 @@ export class HybridDspSeparator implements SeparatorEngine {
   async initialize(): Promise<void> { this.initialized = true; }
 
   async process({ frame, targetClassId }: SeparatorRequest): Promise<SeparatorResult> {
+    return this.processSync({ frame, targetClassId });
+  }
+  processSync({ frame, targetClassId }: SeparatorRequest): SeparatorResult {
     if (!this.initialized) throw new Error("separator is not initialized");
     const identity = targetClassId !== "dishes" || frame.samples.length > 16_384;
     const samples = identity ? new Float32Array(frame.samples) : mask(frame.samples);

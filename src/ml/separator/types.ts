@@ -20,5 +20,6 @@ export interface SeparatorEngine {
   readonly backend: SeparatorBackend;
   initialize(): Promise<void>;
   process(request: SeparatorRequest): Promise<SeparatorResult>;
+  processSync?(request: SeparatorRequest): SeparatorResult;
   dispose(): Promise<void>;
 }
