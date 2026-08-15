@@ -1,6 +1,6 @@
 import type { AudioFrame } from "../../shared/audio/types";
 
-export type SeparatorBackend = "onnx-webgpu" | "onnx-wasm" | "unavailable";
+export type SeparatorBackend = "onnx-webgpu" | "onnx-wasm" | "dsp-hybrid" | "unavailable";
 
 export interface SeparatorRequest {
   readonly frame: AudioFrame;
