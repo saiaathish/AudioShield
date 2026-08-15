@@ -1,31 +1,24 @@
 {
-  "head": "8d3e565fb5d2c57fff1329c69621eff74189aa62",
+  "head": "21557b480c656a160478f8285a7d01df16870592",
+  "ref": "ao/audioshield-11/root",
   "headVerified": true,
-  "build": {
-    "command": "npm run build",
-    "status": "PASS"
-  },
-  "browser": {
-    "capability": "UNVERIFIED",
-    "blocker": "ao browser refused all commands: AO_BROWSER_CAPABILITY is not set",
-    "networkCapture": "UNVERIFIED",
-    "networkCaptureStarted": false
-  },
+  "browserCapability": "UNVERIFIED",
+  "blocker": "ao browser requires the owning session capability (AO_BROWSER_CAPABILITY is not set)",
+  "attemptStopped": true,
+  "networkCapture": "UNVERIFIED",
+  "networkCaptureStarted": false,
+  "sourceModified": false,
   "checks": [
-    {"id":"unpacked-install","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"media-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"protect-current-tab","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"popup-or-side-panel-close","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"continued-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"bypass","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"reopen","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"tab-reload","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"recovery","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"stop","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"},
-    {"id":"duplicate-playback","status":"UNVERIFIED","observed":"Not attempted: AO browser unavailable"}
+    {"id":"unpacked-install","status":"UNVERIFIED"},
+    {"id":"actual-media-playback","status":"UNVERIFIED"},
+    {"id":"protect-and-capture","status":"UNVERIFIED"},
+    {"id":"popup-close-reopen","status":"UNVERIFIED"},
+    {"id":"bypass","status":"UNVERIFIED"},
+    {"id":"tab-reload-recovery","status":"UNVERIFIED"},
+    {"id":"duplicate-playback","status":"UNVERIFIED"},
+    {"id":"local-only-network-observation","status":"UNVERIFIED"}
   ],
   "console": "UNVERIFIED",
   "errors": "UNVERIFIED",
-  "screenshots": "UNVERIFIED",
-  "sourceModified": false
+  "screenshots": "UNVERIFIED"
 }
