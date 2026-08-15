@@ -17,11 +17,11 @@ Measured run:
 
 | metric | p50 | p95 |
 | --- | ---: | ---: |
-| dishes attenuation | 13.291 dB | 13.679 dB |
-| speech preservation (loss) | -0.049 dB | -0.024 dB |
+| hybrid target residual attenuation | 13.291 dB | 13.679 dB |
+| hybrid speech loss | -0.049 dB | -0.024 dB |
 | processing latency | 52.168 ms | 55.413 ms |
 
-Naive whole-window duck reference: 20.000 dB speech loss at 0.1 gain. Hybrid speech loss is lower while dishes attenuation is measured from the residual against the generated speech stem.
+Naive whole-window duck uses the same mixture and stems, gain 0.1. Its stem-referenced speech loss is recorded per case alongside hybrid; the benchmark gate requires hybrid loss lower in all 15 cases. Target attenuation is measured against each original dishes stem and residual output (`output - speech stem`). Speech distortion is measured from that same residual against the original speech stem.
 
 ## Limits / RED gates
 

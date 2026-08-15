@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 2,
-  "generatedAt": "2026-08-15T00:10:21.836Z",
+  "schemaVersion": 3,
+  "generatedAt": "2026-08-15T00:15:33.063Z",
   "metadata": {
     "seed": 7331,
     "sampleRateHz": 16000,
@@ -13,116 +13,209 @@
   "metrics": {
     "selective": {
       "status": "MEASURED",
-      "targetAttenuationDb": {
+      "targetResidualAttenuationDb": {
         "p50": 13.290950604603275,
         "p95": 13.67888456257887
       },
-      "speechPreservationDb": {
+      "speechLossDb": {
         "p50": -0.04866490953208924,
         "p95": -0.024335415740589287
+      },
+      "speechDistortionDb": {
+        "p50": -17.89687170329954,
+        "p95": -16.539900274932904
       }
     },
     "latencyMs": {
       "status": "MEASURED",
-      "p50": 52.16791699999999,
-      "p95": 55.4126083
+      "p50": 52.04575,
+      "p95": 53.00987059999996
     },
     "naiveWholeWindowDuck": {
       "status": "MEASURED",
-      "speechLossDb": 20,
-      "comparison": "hybrid speech loss must be lower; target attenuation is source-estimate residual, not a neural separation score"
+      "targetResidualAttenuationDb": {
+        "p50": -3.7776006492518555,
+        "p95": -1.9276539771426202
+      },
+      "speechLossDb": {
+        "p50": 18.72264800350346,
+        "p95": 19.2319706545988
+      },
+      "speechDistortionDb": {
+        "p50": -0.8971676040028456,
+        "p95": -0.8871459535852555
+      },
+      "comparison": "identical stem-referenced metrics; hybrid must beat naive speech loss in every case"
+    },
+    "gate": {
+      "hybridBeatsNaiveSpeechLossAll15": true
     }
   },
   "cases": [
     {
       "id": "speech-dishes-01",
-      "targetAttenuationDb": 13.142420270658725,
-      "speechPreservationDb": -0.04774883789568918,
-      "latencyMs": 47.798
+      "hybridTargetResidualAttenuationDb": 13.142420270658725,
+      "naiveTargetResidualAttenuationDb": -3.8764210127513365,
+      "hybridSpeechLossDb": -0.04774883789568918,
+      "naiveSpeechLossDb": 18.752266947696775,
+      "hybridSpeechDistortionDb": -17.916008887412907,
+      "naiveSpeechDistortionDb": -0.8971676040028456,
+      "latencyMs": 48.761666999999996,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-02",
-      "targetAttenuationDb": 13.519918820560395,
-      "speechPreservationDb": -0.061469643277401786,
-      "latencyMs": 53.15499999999999
+      "hybridTargetResidualAttenuationDb": 13.519918820560395,
+      "naiveTargetResidualAttenuationDb": -3.1598661939390027,
+      "hybridSpeechLossDb": -0.061469643277401786,
+      "naiveSpeechLossDb": 18.556896187809,
+      "hybridSpeechDistortionDb": -17.574390692244275,
+      "naiveSpeechDistortionDb": -0.8946056777448774,
+      "latencyMs": 52.82299999999999,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-03",
-      "targetAttenuationDb": 13.341947640473776,
-      "speechPreservationDb": -0.053694882223823015,
-      "latencyMs": 51.57279199999999
+      "hybridTargetResidualAttenuationDb": 13.341947640473776,
+      "naiveTargetResidualAttenuationDb": -3.436749856378025,
+      "hybridSpeechLossDb": -0.053694882223823015,
+      "naiveSpeechLossDb": 18.633656234178396,
+      "hybridSpeechDistortionDb": -17.6745892094986,
+      "naiveSpeechDistortionDb": -0.8958917126467973,
+      "latencyMs": 51.984666000000004,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-04",
-      "targetAttenuationDb": 13.620141867294567,
-      "speechPreservationDb": -0.0785701768554361,
-      "latencyMs": 54.10258300000001
+      "hybridTargetResidualAttenuationDb": 13.620141867294567,
+      "naiveTargetResidualAttenuationDb": -1.9514115103382146,
+      "hybridSpeechLossDb": -0.0785701768554361,
+      "naiveSpeechLossDb": 18.18049008676456,
+      "hybridSpeechDistortionDb": -16.45902265708713,
+      "naiveSpeechDistortionDb": -0.8874692794543471,
+      "latencyMs": 53.26137499999999,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-05",
-      "targetAttenuationDb": 13.815950851575579,
-      "speechPreservationDb": -0.073420834095554,
-      "latencyMs": 52.540167
+      "hybridTargetResidualAttenuationDb": 13.815950851575579,
+      "naiveTargetResidualAttenuationDb": -1.8722197330195662,
+      "hybridSpeechLossDb": -0.073420834095554,
+      "naiveSpeechLossDb": 18.156184100264856,
+      "hybridSpeechDistortionDb": -16.57456211115252,
+      "naiveSpeechDistortionDb": -0.8863915265573752,
+      "latencyMs": 52.195708000000025,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-06",
-      "targetAttenuationDb": 12.94531774410224,
-      "speechPreservationDb": -0.033376593232041785,
-      "latencyMs": 51.74704200000002
+      "hybridTargetResidualAttenuationDb": 12.94531774410224,
+      "naiveTargetResidualAttenuationDb": -5.344151811529766,
+      "hybridSpeechLossDb": -0.033376593232041785,
+      "naiveSpeechLossDb": 19.072316811689575,
+      "hybridSpeechDistortionDb": -19.192316257975364,
+      "naiveSpeechDistortionDb": -0.9028467023433571,
+      "latencyMs": 51.23641700000002,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-07",
-      "targetAttenuationDb": 12.974215402258192,
-      "speechPreservationDb": -0.03960102795440079,
-      "latencyMs": 51.40266600000001
+      "hybridTargetResidualAttenuationDb": 12.974215402258192,
+      "naiveTargetResidualAttenuationDb": -4.591383302895714,
+      "hybridSpeechLossDb": -0.03960102795440079,
+      "naiveSpeechLossDb": 18.921774723097954,
+      "hybridSpeechDistortionDb": -18.465340286140098,
+      "naiveSpeechDistortionDb": -0.8997415809861913,
+      "latencyMs": 50.794749999999965,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-08",
-      "targetAttenuationDb": 13.290950604603275,
-      "speechPreservationDb": -0.04941084290015496,
-      "latencyMs": 52.35704100000004
+      "hybridTargetResidualAttenuationDb": 13.290950604603275,
+      "naiveTargetResidualAttenuationDb": -3.704406370551368,
+      "hybridSpeechLossDb": -0.04941084290015496,
+      "naiveSpeechLossDb": 18.710206457136916,
+      "hybridSpeechDistortionDb": -17.89152836656915,
+      "naiveSpeechDistortionDb": -0.8961713914145086,
+      "latencyMs": 52.131875000000036,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-09",
-      "targetAttenuationDb": 13.445990115429165,
-      "speechPreservationDb": -0.05004951466222707,
-      "latencyMs": 52.11899999999997
+      "hybridTargetResidualAttenuationDb": 13.445990115429165,
+      "naiveTargetResidualAttenuationDb": -3.546565949640396,
+      "hybridSpeechLossDb": -0.05004951466222707,
+      "naiveSpeechLossDb": 18.666840415232937,
+      "hybridSpeechDistortionDb": -17.888349440144342,
+      "naiveSpeechDistortionDb": -0.8957933750747813,
+      "latencyMs": 52.687707999999986,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-10",
-      "targetAttenuationDb": 13.395823268921404,
-      "speechPreservationDb": -0.05468876717593574,
-      "latencyMs": 52.16791699999999
+      "hybridTargetResidualAttenuationDb": 13.395823268921404,
+      "naiveTargetResidualAttenuationDb": -2.988155314382432,
+      "hybridSpeechLossDb": -0.05468876717593574,
+      "naiveSpeechLossDb": 18.512709929610157,
+      "hybridSpeechDistortionDb": -17.27688530952484,
+      "naiveSpeechDistortionDb": -0.8929067262210033,
+      "latencyMs": 52.14837499999999,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-11",
-      "targetAttenuationDb": 12.86039374486602,
-      "speechPreservationDb": -0.022289749695339367,
-      "latencyMs": 51.82625000000007
+      "hybridTargetResidualAttenuationDb": 12.86039374486602,
+      "naiveTargetResidualAttenuationDb": -6.441445754476209,
+      "hybridSpeechLossDb": -0.022289749695339367,
+      "naiveSpeechLossDb": 19.2668572983889,
+      "hybridSpeechDistortionDb": -20.20696688797159,
+      "naiveSpeechDistortionDb": -0.90512738862936,
+      "latencyMs": 50.90195799999992,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-12",
-      "targetAttenuationDb": 12.563256010159336,
-      "speechPreservationDb": -0.025212129759982105,
-      "latencyMs": 50.934124999999995
+      "hybridTargetResidualAttenuationDb": 12.563256010159336,
+      "naiveTargetResidualAttenuationDb": -6.119412821639358,
+      "hybridSpeechLossDb": -0.025212129759982105,
+      "naiveSpeechLossDb": 19.217019235831618,
+      "hybridSpeechDistortionDb": -19.586764575977693,
+      "naiveSpeechDistortionDb": -0.9040957441789992,
+      "latencyMs": 49.82741699999997,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-13",
-      "targetAttenuationDb": 13.007619616878287,
-      "speechPreservationDb": -0.03771796667540883,
-      "latencyMs": 52.261625000000095
+      "hybridTargetResidualAttenuationDb": 13.007619616878287,
+      "naiveTargetResidualAttenuationDb": -4.744664633697202,
+      "hybridSpeechLossDb": -0.03771796667540883,
+      "naiveSpeechLossDb": 18.95592257748192,
+      "hybridSpeechDistortionDb": -18.652445202414377,
+      "naiveSpeechDistortionDb": -0.9001609518388882,
+      "latencyMs": 52.04575,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-14",
-      "targetAttenuationDb": 13.398274879192723,
-      "speechPreservationDb": -0.0406587169487338,
-      "latencyMs": 53.91062499999998
+      "hybridTargetResidualAttenuationDb": 13.398274879192723,
+      "naiveTargetResidualAttenuationDb": -4.330459392080762,
+      "hybridSpeechLossDb": -0.0406587169487338,
+      "naiveSpeechLossDb": 18.86008658204166,
+      "hybridSpeechDistortionDb": -18.62792988900977,
+      "naiveSpeechDistortionDb": -0.8991956177362859,
+      "latencyMs": 51.678792000000044,
+      "hybridBeatsNaiveSpeechLoss": true
     },
     {
       "id": "speech-dishes-15",
-      "targetAttenuationDb": 13.221801732908506,
-      "speechPreservationDb": -0.04866490953208924,
-      "latencyMs": 58.469334
+      "hybridTargetResidualAttenuationDb": 13.221801732908506,
+      "naiveTargetResidualAttenuationDb": -3.7776006492518555,
+      "hybridSpeechLossDb": -0.04866490953208924,
+      "naiveSpeechLossDb": 18.72264800350346,
+      "hybridSpeechDistortionDb": -17.89687170329954,
+      "naiveSpeechDistortionDb": -0.8974693211391767,
+      "latencyMs": 52.90208299999995,
+      "hybridBeatsNaiveSpeechLoss": true
     }
   ],
   "limits": [
