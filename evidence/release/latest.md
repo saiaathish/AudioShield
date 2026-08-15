@@ -1,6 +1,6 @@
 # AudioShield release evidence
 
-- HEAD: `8ae4a9e9059a609b3f5b1ccd801a5696de5c53ec`
+- HEAD: `4e1f58b8ba91060eaeb68bb34b0b6b188b6f3a46` (audited pre-ledger commit)
 - Browser smoke: **UNVERIFIED**
 - Scope: evidence only; no production source or prior test-results evidence modified.
 
@@ -13,6 +13,8 @@
 - `npm audit`: FAIL — 5 vulnerabilities (3 moderate, 1 high, 1 critical); remediation requires breaking `--force` upgrade.
 
 ## Benchmark
+
+- Hybrid DSP: **YELLOW** — synthetic/offline benchmark only; runtime diagnostics report `metricsAvailable=false`; browser real-time behavior **UNVERIFIED**.
 
 From `bench/results/latest.json`:
 

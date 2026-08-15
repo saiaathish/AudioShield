@@ -1,5 +1,5 @@
 {
-  "head": "8ae4a9e9059a609b3f5b1ccd801a5696de5c53ec",
+  "head": "4e1f58b8ba91060eaeb68bb34b0b6b188b6f3a46",
   "browserSmoke": "UNVERIFIED",
   "scope": "evidence-only",
   "gates": {
@@ -10,6 +10,7 @@
     "npmAudit": { "status": "FAIL", "vulnerabilities": 5, "severity": { "moderate": 3, "high": 1, "critical": 1 } }
   },
   "benchmark": {
+    "hybridDsp": { "status": "YELLOW", "scope": "synthetic offline benchmark only", "metricsAvailableInRuntime": false, "browserRealtime": "UNVERIFIED" },
     "separatorAdapter": "NOT_RUN",
     "detection": "NOT_RUN",
     "selective": "NOT_RUN",
