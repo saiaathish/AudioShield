@@ -1,5 +1,6 @@
 export type OffscreenStatus =
   | { state: "capturing" }
+  | { state: "protecting"; engine: "dsp-hybrid" }
   | { state: "idle" }
   | { state: "unavailable"; code: "SEPARATOR_UNAVAILABLE" }
   | { state: "bypassed" }
@@ -17,7 +18,10 @@ type AudioContextLike = {
   destination: unknown;
   resume(): Promise<void>;
   close(): Promise<void>;
+  createScriptProcessor?: (bufferSize?: number, inputChannels?: number, outputChannels?: number) => AudioProcessorNodeLike;
 };
+type AudioProcessorNodeLike = { connect(destination: unknown): void; disconnect(): void; onaudioprocess?: ((event: any) => void) | null };
+type AudioProcessEventLike = { inputBuffer: { getChannelData(channel: number): Float32Array; sampleRate: number; numberOfChannels: number }; outputBuffer: { getChannelData(channel: number): Float32Array; numberOfChannels: number } };
 
 export function createAudioRuntime(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>,
@@ -29,16 +33,22 @@ export function createAudioRuntime(
   let statusListener: ((status: OffscreenStatus) => void) | undefined;
   let stopping = false;
   let bypassed = false;
+  let processor: AudioProcessorNodeLike | undefined;
+  let separator: import("../ml/separator/types").SeparatorEngine | undefined;
 
   const emit = (status: OffscreenStatus) => statusListener?.(status);
   const cleanup = async () => {
     const oldSource = source;
     const oldStream = stream;
     const oldContext = context;
+    const oldProcessor = processor;
     source = undefined;
     stream = undefined;
     context = undefined;
+    processor = undefined;
+    separator = undefined;
     oldSource?.disconnect();
+    oldProcessor?.disconnect();
     oldStream?.getTracks().forEach((track) => track.stop());
     if (oldContext) await oldContext.close();
   };
@@ -58,11 +68,23 @@ export function createAudioRuntime(
         } } as MediaStreamConstraints);
         stream.getTracks().forEach((track) => track.addEventListener("ended", () => { void this.stop(); }));
         source = context.createMediaStreamSource(stream);
-        source.connect(context.destination); // Exactly one output route.
+        if (!bypassed && context.createScriptProcessor) {
+          const { HybridDspSeparator } = await import("../ml/separator/hybrid-dsp");
+          separator = new HybridDspSeparator();
+          await separator.initialize();
+          processor = context.createScriptProcessor(1024, 1, 1);
+          processor.onaudioprocess = (event) => {
+            const input = event.inputBuffer.getChannelData(0);
+            const output = event.outputBuffer.getChannelData(0);
+            void separator?.process({ frame: { sampleRate: event.inputBuffer.sampleRate, channels: event.inputBuffer.numberOfChannels, samples: input }, targetClassId: "dishes" }).then((result) => output.set(result.frame.samples));
+          };
+          source.connect(processor);
+          processor.connect(context.destination); // Exactly one source -> processing -> destination route.
+        } else {
+          source.connect(context.destination); // Bypass/fallback identity route, exactly once.
+        }
         await context.resume();
-        // UnavailableSeparator is intentionally fail-closed: playback remains one
-        // pass-through route, while the UI receives no false selective claim.
-        emit(bypassed ? { state: "bypassed" } : { state: "unavailable", code: "SEPARATOR_UNAVAILABLE" });
+        emit(bypassed ? { state: "bypassed" } : separator ? { state: "protecting", engine: "dsp-hybrid" } : { state: "unavailable", code: "SEPARATOR_UNAVAILABLE" });
       } catch {
         await cleanup();
         emit({ state: "error", code: "CAPTURE_START_FAILED" });

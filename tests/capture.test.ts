@@ -62,6 +62,21 @@ describe("offscreen tab playback", () => {
     expect(source.connect).toHaveBeenCalledTimes(1);
     expect(statuses).toEqual(["unavailable", "bypassed", "capturing"]);
   });
+
+  it("uses one hybrid processing route when the context supports processing", async () => {
+    const stream = fakeStream();
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null as ((event: unknown) => void) | null };
+    const context = { destination: {}, createMediaStreamSource: vi.fn(() => source), createScriptProcessor: vi.fn(() => processor), resume: vi.fn(async () => undefined), close: vi.fn(async () => undefined) };
+    const runtime = createAudioRuntime(vi.fn(async () => stream), () => context);
+    const statuses: string[] = [];
+    runtime.onStatus((status) => statuses.push(status.state));
+    await runtime.start("hybrid-stream");
+    expect(source.connect).toHaveBeenCalledWith(processor);
+    expect(processor.connect).toHaveBeenCalledWith(context.destination);
+    expect(statuses).toEqual(["protecting"]);
+    await runtime.stop();
+  });
 });
 
 describe("background capture lifecycle", () => {

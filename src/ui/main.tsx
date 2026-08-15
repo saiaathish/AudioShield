@@ -36,6 +36,7 @@ const chromeRuntime: UiRuntime = {
 function statusCopy(status: EngineStatus, protectedTab: boolean) {
   if (status.state === "error") return { title: "Needs attention", detail: status.code };
   if (status.state === "unavailable") return { title: "Protection unavailable", detail: "Selective separation is unavailable; audio remains unchanged" };
+  if (status.state === "protecting") return { title: "Protecting this tab", detail: "Local DSP protection active" };
   if (status.state === "loading-models") return { title: "Getting ready", detail: "Preparing local protection" };
   if (status.state === "bypassed") return { title: "Bypass on", detail: "Protection paused for this tab" };
   if (protectedTab) return { title: "Protecting this tab", detail: "Listening locally for your selected triggers" };

@@ -58,6 +58,9 @@ chrome.tabs.onRemoved.addListener((tabId) => void stopProtection(tabId));
 chrome.runtime.onMessage.addListener((message: { type: string; status?: { state: string; code?: string } }) => {
   if (message.type !== "ENGINE_STATUS" || !message.status) return;
   if (message.status.state === "idle") session = undefined;
+  if (message.status.state === "protecting") {
+    void sendStatus({ state: "protecting", tabId: session?.tabId ?? -1, engine: "dsp-hybrid" });
+  }
   if (message.status.state === "unavailable") {
     void sendStatus({ state: "unavailable", tabId: session?.tabId ?? -1, code: "SEPARATOR_UNAVAILABLE" });
   }
