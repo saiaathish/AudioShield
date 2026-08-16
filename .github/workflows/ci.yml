@@ -18,6 +18,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Upgrade vulnerable dev toolchain for verification
+        run: npm install --save-dev esbuild@^0.28.2 vitest@^4.1.10
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
@@ -26,6 +28,9 @@ jobs:
         run: npm audit --json > npm-audit.json || true
       - uses: actions/upload-artifact@v4
         with:
-          name: npm-audit
-          path: npm-audit.json
+          name: dependency-upgrade
+          path: |
+            package.json
+            package-lock.json
+            npm-audit.json
           if-no-files-found: error
