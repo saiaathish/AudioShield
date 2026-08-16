@@ -19,6 +19,12 @@ import {
 
 export type SensoryEngineName = "gtcrn" | "rnnoise" | "native-sensory";
 
+/** Small intentional guard delay so fast transient routing can act before playback. */
+export const EVENT_LOOKAHEAD_SECONDS = 0.026;
+/** Control-rate analysis cadence. Heavy PCM work stays in Web Audio/AudioWorklet. */
+export const ANALYSIS_INTERVAL_MS = 24;
+export const ANALYSIS_FFT_SIZE = 1024;
+
 export interface SensoryGraph {
   readonly engine: SensoryEngineName;
   setRules(rules: readonly TriggerRule[], masterStrength: number): void;
@@ -71,17 +77,18 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield v3: competitive event routing.
+ * AudioShield v4: low-latency sensory routing.
  *
- * The neural denoiser is no longer allowed to claim every suppressible sound as
- * "background noise". A temporal router classifies foreground structure first:
- * persistent tones -> alarms, high-flux/ultra-high transients -> glass,
- * broadband impacts -> clatter, dense bursts -> applause/loudness. Foreground
- * confidence pre-empts the background route, then each dedicated control acts.
+ * This is deliberately a perceptual router, not a semantic object classifier.
+ * It looks for acoustic structures a sound-sensitive listener may want reduced:
+ * steady noise, persistent piercing tones, brittle high-flux transients,
+ * broadband clatter, dense bursts, harsh highs, and startling loudness.
+ * Foreground sensory routes pre-empt broad neural denoising.
  *
- * Protection strength is linear from 0-100. The neural dry path is delayed to
- * match the packaged GTCRN/RNNoise worklets, allowing continuous dry/wet
- * blending without the comb filtering that an unaligned parallel path creates.
+ * The protected path has a 26 ms guard delay. Analysis taps the undelayed source,
+ * giving transient controls a small opportunity to engage before that sound is
+ * emitted. The neural dry branch remains delay-aligned with GTCRN/RNNoise so
+ * every 1% strength step can blend continuously without comb filtering.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -93,13 +100,14 @@ export async function createSensoryGraph(
   const engine: SensoryEngineName = neural?.engine ?? "native-sensory";
   const alignmentDelaySeconds = neuralDelaySeconds(engine, context.sampleRate);
 
-  const bypassDelay = context.createDelay(0.05);
+  const bypassDelay = context.createDelay(0.08);
   const bypassGain = context.createGain();
   const wetGain = context.createGain();
   const neuralDryDelay = context.createDelay(0.05);
   const neuralDryGain = context.createGain();
   const neuralWetGain = context.createGain();
   const merge = context.createGain();
+  const eventLookahead = context.createDelay(0.05);
   const presence = context.createBiquadFilter();
   const harshShelf = context.createBiquadFilter();
   const toneA = context.createBiquadFilter();
@@ -111,8 +119,11 @@ export async function createSensoryGraph(
   const analyser = context.createAnalyser();
   const analysisSink = context.createGain();
 
-  bypassDelay.delayTime.value = alignmentDelaySeconds;
+  // Bypass and protected output remain time-aligned so toggling does not create
+  // a short flange/echo. Neural alignment is handled before the shared guard.
+  bypassDelay.delayTime.value = alignmentDelaySeconds + EVENT_LOOKAHEAD_SECONDS;
   neuralDryDelay.delayTime.value = alignmentDelaySeconds;
+  eventLookahead.delayTime.value = EVENT_LOOKAHEAD_SECONDS;
   bypassGain.gain.value = 0;
   wetGain.gain.value = 1;
   neuralDryGain.gain.value = 1;
@@ -136,11 +147,11 @@ export async function createSensoryGraph(
     tone.gain.value = 0;
   }
 
-  // Exact 0% must be transparent. Dynamics increase continuously from here.
+  // Exact 0% stays transparent. Dynamics only rise when a routed event asks.
   compressor.threshold.value = 0;
   compressor.knee.value = 8;
   compressor.ratio.value = 1;
-  compressor.attack.value = 0.010;
+  compressor.attack.value = 0.006;
   compressor.release.value = 0.095;
 
   limiter.threshold.value = 0;
@@ -149,19 +160,17 @@ export async function createSensoryGraph(
   limiter.attack.value = 0.0015;
   limiter.release.value = 0.06;
 
-  analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.52;
+  // 1024 @ 48 kHz is a ~21 ms analysis window. The previous 2048/70 ms loop
+  // could react too late to the objectionable onset of a brittle transient.
+  analyser.fftSize = ANALYSIS_FFT_SIZE;
+  analyser.smoothingTimeConstant = 0.28;
   analyser.minDecibels = -100;
   analyser.maxDecibels = -8;
 
-  // Bypass uses the same alignment delay as the protected path so toggling it
-  // does not create a short echo/flange against a latency-bearing neural path.
   source.connect(bypassDelay);
   bypassDelay.connect(bypassGain);
   bypassGain.connect(context.destination);
 
-  // Delay-aligned dry + neural wet branches give every slider percentage a
-  // real, continuous amount of neural influence rather than an on/off knee.
   source.connect(neuralDryDelay);
   neuralDryDelay.connect(neuralDryGain);
   neuralDryGain.connect(merge);
@@ -171,7 +180,8 @@ export async function createSensoryGraph(
     neuralWetGain.connect(merge);
   }
 
-  merge.connect(presence);
+  merge.connect(eventLookahead);
+  eventLookahead.connect(presence);
   presence.connect(harshShelf);
   harshShelf.connect(toneA);
   toneA.connect(toneB);
@@ -182,6 +192,7 @@ export async function createSensoryGraph(
   limiter.connect(wetGain);
   wetGain.connect(context.destination);
 
+  // Detection listens to the undelayed source. It never enters the audible path.
   source.connect(analyser);
   analyser.connect(analysisSink);
   analysisSink.connect(context.destination);
@@ -221,13 +232,15 @@ export async function createSensoryGraph(
     return clamp(rule.strength, 0, 100) * clamp(masterStrength, 0, 100) / 100;
   };
 
-  const maybeEmit = (id: TriggerId, confidence: number, attenuationDb?: number, dominantFrequencyHz?: number) => {
+  const maybeEmit = (id: TriggerId, routingScore: number, attenuationDb?: number, dominantFrequencyHz?: number) => {
     const now = Date.now();
-    if (now - (lastEventAt.get(id) ?? 0) < 420) return;
+    if (now - (lastEventAt.get(id) ?? 0) < 320) return;
     lastEventAt.set(id, now);
     emitEvent({
       triggerId: id,
-      confidence: clamp(confidence),
+      // Kept as `confidence` for message compatibility. UI labels it correctly
+      // as a routing score; it is not presented as a calibrated probability.
+      confidence: clamp(routingScore),
       timestamp: now,
       tabId,
       attenuationDb,
@@ -239,12 +252,12 @@ export async function createSensoryGraph(
   const applyNeuralRouting = () => {
     if (!neural) {
       currentNeuralMix = 0;
-      setParam(neuralDryGain.gain, 1, context, 0.02);
+      setParam(neuralDryGain.gain, 1, context, 0.012);
       return;
     }
     currentNeuralMix = continuousNeuralMix(effective("background-noise"), lastRoutes.background);
-    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.024);
-    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.024);
+    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.016);
+    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.016);
   };
 
   const applyDynamicProfile = (stats: FrameStats) => {
@@ -261,15 +274,15 @@ export async function createSensoryGraph(
       neuralMix: currentNeuralMix,
     });
 
-    setParam(presence.gain, profile.presenceDb, context, 0.055);
-    setParam(harshShelf.gain, profile.highShelfDb, context, 0.038);
-    setParam(transientGain.gain, profile.transientGain, context, 0.014);
-    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.028);
-    setParam(compressor.ratio, profile.compressorRatio, context, 0.028);
-    setParam(compressor.attack, profile.compressorAttack, context, 0.028);
-    setParam(compressor.release, profile.compressorRelease, context, 0.045);
-    setParam(limiter.threshold, profile.limiterThresholdDb, context, 0.03);
-    setParam(limiter.ratio, profile.limiterRatio, context, 0.03);
+    setParam(presence.gain, profile.presenceDb, context, 0.035);
+    setParam(harshShelf.gain, profile.highShelfDb, context, 0.018);
+    setParam(transientGain.gain, profile.transientGain, context, 0.007);
+    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.009);
+    setParam(compressor.ratio, profile.compressorRatio, context, 0.009);
+    setParam(compressor.attack, profile.compressorAttack, context, 0.009);
+    setParam(compressor.release, profile.compressorRelease, context, 0.025);
+    setParam(limiter.threshold, profile.limiterThresholdDb, context, 0.01);
+    setParam(limiter.ratio, profile.limiterRatio, context, 0.01);
   };
 
   const applyRules = () => {
@@ -307,15 +320,16 @@ export async function createSensoryGraph(
     const loudnessStrength = effective("sudden-loudness");
 
     envelopes = {
-      glass: updateEnvelope(envelopes.glass, glassStrength > 0 ? lastRoutes.glass : 0, 0.48),
-      clatter: updateEnvelope(envelopes.clatter, clatterStrength > 0 ? lastRoutes.clatter : 0, 0.67),
-      applause: updateEnvelope(envelopes.applause, applauseStrength > 0 ? lastRoutes.applause : 0, 0.84),
-      loudness: updateEnvelope(envelopes.loudness, loudnessStrength > 0 ? lastRoutes.loudness : 0, 0.70),
+      glass: updateEnvelope(envelopes.glass, glassStrength > 0 ? lastRoutes.glass : 0, 0.42),
+      clatter: updateEnvelope(envelopes.clatter, clatterStrength > 0 ? lastRoutes.clatter : 0, 0.58),
+      applause: updateEnvelope(envelopes.applause, applauseStrength > 0 ? lastRoutes.applause : 0, 0.80),
+      loudness: updateEnvelope(envelopes.loudness, loudnessStrength > 0 ? lastRoutes.loudness : 0, 0.62),
     };
 
-    // Foreground routing is decided before the broad neural mix is updated.
-    // Alarm/glass confidence therefore immediately pushes background denoising
-    // out of the way and lets the dedicated event controls own the attenuation.
+    // Foreground routing is decided before broad neural mixing. A piercing tone
+    // or brittle transient can therefore reduce the background route instead of
+    // being silently attributed to "background noise" just because GTCRN can
+    // remove it.
     applyNeuralRouting();
 
     if (effective("background-noise") > 0 && currentNeuralMix > 0.01 && lastRoutes.background >= 0.24) {
@@ -345,23 +359,22 @@ export async function createSensoryGraph(
         const speechGuard = 1 - stats.speechLikelihood * 0.30;
         const persistence = clamp((tracker.persistence - 1) / 5);
         const routeWeight = Math.max(lastRoutes.alarm, tracker.confidence * persistence);
-        // No fixed minimum attenuation: 1% really is ~1/100th of 100%.
         const attenuation = -20 * alarmUnit * routeWeight * speechGuard;
-        setParam(tone.frequency, tracker.frequencyHz, context, 0.020);
-        setParam(tone.Q, 10 + tracker.confidence * 11, context, 0.025);
-        setParam(tone.gain, attenuation, context, 0.022);
+        setParam(tone.frequency, tracker.frequencyHz, context, 0.010);
+        setParam(tone.Q, 10 + tracker.confidence * 11, context, 0.012);
+        setParam(tone.gain, attenuation, context, 0.010);
         if (index === 0 && routeWeight >= 0.14) {
           maybeEmit("alarm-siren", routeWeight, attenuation, tracker.frequencyHz);
         }
       } else {
-        setParam(tone.gain, 0, context, 0.042);
+        setParam(tone.gain, 0, context, 0.022);
       }
     }
 
     applyDynamicProfile(stats);
   };
 
-  const timer = globalThis.setInterval(analyze, 70);
+  const timer = globalThis.setInterval(analyze, ANALYSIS_INTERVAL_MS);
 
   return {
     engine,
@@ -371,8 +384,8 @@ export async function createSensoryGraph(
       applyRules();
     },
     setBypass(enabled) {
-      setParam(bypassGain.gain, enabled ? 1 : 0, context, 0.014);
-      setParam(wetGain.gain, enabled ? 0 : 1, context, 0.014);
+      setParam(bypassGain.gain, enabled ? 1 : 0, context, 0.012);
+      setParam(wetGain.gain, enabled ? 0 : 1, context, 0.012);
     },
     destroy() {
       if (destroyed) return;
@@ -390,6 +403,7 @@ export async function createSensoryGraph(
         neuralDryGain,
         neuralWetGain,
         merge,
+        eventLookahead,
         presence,
         harshShelf,
         toneA,
