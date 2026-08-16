@@ -12,7 +12,9 @@ import {
 import {
   alarmAttenuationDb,
   alarmNotchQ,
+  alarmStemMix,
   alarmStrengthDrive,
+  stemRouteMix,
 } from "../src/offscreen/sensory-engine";
 
 const frame = (overrides: Partial<FrameStats> = {}): FrameStats => ({
@@ -109,6 +111,26 @@ describe("suppression regression guard", () => {
     expect(cut75).toBeLessThan(-35);
     expect(cut100).toBeLessThan(-55);
     expect(alarmNotchQ(100, 0.9)).toBeLessThan(alarmNotchQ(25, 0.9));
+  });
+
+  it("uses event routes to remix toward the neural foreground stem", () => {
+    expect(stemRouteMix(0, 1, 1.2)).toBe(0);
+    expect(stemRouteMix(100, 1, 1.2)).toBe(1);
+    expect(alarmStemMix(0, 1)).toBe(0);
+    expect(alarmStemMix(100, 1)).toBe(1);
+
+    let previousAlarmMix = -1;
+    for (let value = 0; value <= 100; value += 1) {
+      const mix = alarmStemMix(value, 0.95);
+      expect(mix).toBeGreaterThan(previousAlarmMix);
+      previousAlarmMix = mix;
+    }
+
+    expect(alarmStemMix(25, 0.95)).toBeGreaterThan(0.15);
+    expect(alarmStemMix(50, 0.95)).toBeGreaterThan(0.40);
+    expect(alarmStemMix(75, 0.95)).toBeGreaterThan(0.70);
+    expect(alarmStemMix(100, 0.95)).toBeGreaterThan(0.99);
+    expect(stemRouteMix(100, 0.95, 1.2)).toBeGreaterThan(0.99);
   });
 
   it("keeps persistent alarm tones dominant over generic background routing", () => {
