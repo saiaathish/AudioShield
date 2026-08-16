@@ -9,6 +9,11 @@ import {
   type FrameStats,
   type ToneTracker,
 } from "../src/offscreen/perceptual-control";
+import {
+  alarmAttenuationDb,
+  alarmNotchQ,
+  alarmStrengthDrive,
+} from "../src/offscreen/sensory-engine";
 
 const frame = (overrides: Partial<FrameStats> = {}): FrameStats => ({
   peak: 0.55,
@@ -76,6 +81,34 @@ describe("suppression regression guard", () => {
     expect(p100.highShelfDb).toBeGreaterThanOrEqual(-20);
     expect(p100.transientGain).toBeLessThan(0.75);
     expect(p100.compressorRatio).toBeGreaterThan(2);
+  });
+
+  it("maps alarm protection from transparent zero to emergency-grade maximum", () => {
+    expect(alarmStrengthDrive(0)).toBe(0);
+    expect(alarmStrengthDrive(100)).toBe(1);
+    expect(alarmAttenuationDb(0, 0.9, 0.1)).toBe(0);
+
+    let previousDrive = alarmStrengthDrive(0);
+    let previousCut = alarmAttenuationDb(0, 0.9, 0.1);
+    for (let value = 1; value <= 100; value += 1) {
+      const drive = alarmStrengthDrive(value);
+      const cut = alarmAttenuationDb(value, 0.9, 0.1);
+      expect(drive).toBeGreaterThan(previousDrive);
+      expect(cut).toBeLessThan(previousCut);
+      previousDrive = drive;
+      previousCut = cut;
+    }
+
+    const cut25 = alarmAttenuationDb(25, 0.9, 0.1);
+    const cut50 = alarmAttenuationDb(50, 0.9, 0.1);
+    const cut75 = alarmAttenuationDb(75, 0.9, 0.1);
+    const cut100 = alarmAttenuationDb(100, 0.9, 0.1);
+
+    expect(cut25).toBeGreaterThan(-15);
+    expect(cut50).toBeLessThan(-20);
+    expect(cut75).toBeLessThan(-35);
+    expect(cut100).toBeLessThan(-55);
+    expect(alarmNotchQ(100, 0.9)).toBeLessThan(alarmNotchQ(25, 0.9));
   });
 
   it("keeps persistent alarm tones dominant over generic background routing", () => {
