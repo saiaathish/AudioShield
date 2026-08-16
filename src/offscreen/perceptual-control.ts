@@ -64,14 +64,28 @@ export interface DynamicProfile {
   presenceDb: number;
 }
 
-/** Exact linear input control: every integer percentage maps to a unique unit value. */
+/** Exact 0-100 input representation. Every integer percentage remains distinct. */
 export const strengthToUnit = (strength: number): number => clamp(strength, 0, 100) / 100;
 
 /**
- * Compose a per-profile percentage with the master percentage without the old
- * "double attenuation" problem. The input axes stay continuous and 0/100 remain
- * exact, while the perceptual curve gives useful movement through the middle of
- * the slider instead of making 65% x 70% feel like ~45% protection.
+ * Smooth perceptual drive. There is no threshold or plateau: every higher input
+ * produces a higher processing amount, while the middle of the slider is no
+ * longer acoustically timid.
+ */
+export const perceptualDrive = (strength: number): number => {
+  const unit = strengthToUnit(strength);
+  return Math.sin(unit * Math.PI / 2);
+};
+
+/** Route scores are evidence, not probabilities. Make medium/high evidence decisive. */
+export const routeDrive = (route: number): number => {
+  const unit = clamp(route);
+  return 1 - (1 - unit) ** 2;
+};
+
+/**
+ * Compose profile + master controls without the old double-attenuation problem.
+ * 0 stays 0, 100/100 stays 100, and every intermediate value remains unique.
  */
 export function composeProtectionStrength(profileStrength: number, masterStrength: number): number {
   const product = strengthToUnit(profileStrength) * strengthToUnit(masterStrength);
@@ -93,9 +107,8 @@ export function neuralDelaySeconds(engine: "gtcrn" | "rnnoise" | "native-sensory
   return 640 / sampleRate;
 }
 
-/** Route confidence is perceptually expanded so real background noise is audible at sane strengths. */
 export const continuousNeuralMix = (backgroundStrength: number, backgroundRoute: number): number =>
-  strengthToUnit(backgroundStrength) * Math.sqrt(clamp(backgroundRoute));
+  perceptualDrive(backgroundStrength) * routeDrive(backgroundRoute);
 
 export function computeFrameStats(
   frequencies: Float32Array,
@@ -336,15 +349,18 @@ export function computeSensoryRoutes(stats: FrameStats, toneTrackers: readonly T
 
   const musicPenalty = harmonicStackPenalty(stableTones);
   const structuredAudioGuard = 1 - stats.speechLikelihood * 0.28;
-  const alarm = clamp((strongestTone * 1.22 + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
+  const alarmRaw = clamp((strongestTone * 1.22 + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
+  const alarm = routeDrive(alarmRaw);
 
-  const glass = clamp(stats.glassConfidence * 1.08);
-  const clatter = clamp(stats.clatterConfidence * (1 - glass * 0.62));
-  const applause = clamp(stats.applauseConfidence * (1 - glass * 0.52));
-  const harsh = stats.harshConfidence;
-  const loudness = stats.loudnessConfidence;
+  const glass = routeDrive(stats.glassConfidence);
+  const clatter = routeDrive(stats.clatterConfidence * (1 - glass * 0.62));
+  const applause = routeDrive(stats.applauseConfidence * (1 - glass * 0.52));
+  const harsh = routeDrive(stats.harshConfidence);
+  const loudness = routeDrive(stats.loudnessConfidence);
   const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness, harsh * 0.62);
-  const background = clamp(stats.backgroundConfidence * (1 - foregroundDominance * 1.12));
+
+  const backgroundBase = routeDrive(stats.backgroundConfidence);
+  const background = clamp(backgroundBase * (1 - foregroundDominance) ** 2.4);
 
   return { background, alarm, glass, clatter, applause, harsh, loudness, foregroundDominance };
 }
@@ -367,43 +383,45 @@ export function computeDynamicProfile(input: {
   routes: SensoryRoutes;
   neuralMix: number;
 }): DynamicProfile {
-  const harsh = strengthToUnit(input.harshStrength);
-  const glass = strengthToUnit(input.glassStrength);
-  const clatter = strengthToUnit(input.clatterStrength);
-  const applause = strengthToUnit(input.applauseStrength);
-  const loudness = strengthToUnit(input.loudnessStrength);
-  const background = strengthToUnit(input.backgroundStrength);
-  const speechGuard = 1 - input.stats.speechLikelihood * 0.28;
+  const harsh = perceptualDrive(input.harshStrength);
+  const glass = perceptualDrive(input.glassStrength);
+  const clatter = perceptualDrive(input.clatterStrength);
+  const applause = perceptualDrive(input.applauseStrength);
+  const loudness = perceptualDrive(input.loudnessStrength);
+  const background = perceptualDrive(input.backgroundStrength);
+  const speechGuard = 1 - input.stats.speechLikelihood * 0.24;
 
   const dynamicHighCut = (
-    input.envelopes.glass * glass * 14.0 +
-    input.envelopes.clatter * clatter * 9.0 +
-    input.envelopes.applause * applause * 5.8
+    input.envelopes.glass * glass * 16.0 +
+    input.envelopes.clatter * clatter * 10.0 +
+    input.envelopes.applause * applause * 6.0
   ) * speechGuard;
-  const steadyHarshCut = harsh * input.routes.harsh * 10.5;
+  const steadyHarshCut = harsh * input.routes.harsh * 11.0;
   const highShelfDb = -Math.min(20, steadyHarshCut + dynamicHighCut);
 
-  const transientDb = -Math.min(12, (
-    input.envelopes.glass * glass * 10.0 +
-    input.envelopes.clatter * clatter * 6.2 +
-    input.envelopes.applause * applause * 3.2 +
-    input.envelopes.loudness * loudness * 8.0
+  const transientDb = -Math.min(13, (
+    input.envelopes.glass * glass * 11.0 +
+    input.envelopes.clatter * clatter * 6.8 +
+    input.envelopes.applause * applause * 3.4 +
+    input.envelopes.loudness * loudness * 8.8
   ) * speechGuard);
 
   const impact = clamp(
     input.envelopes.glass * glass * 1.15 +
     input.envelopes.clatter * clatter * 0.82 +
     input.envelopes.applause * applause * 0.50 +
-    input.envelopes.loudness * loudness * 1.08,
+    input.envelopes.loudness * loudness * 1.10,
   );
 
+  // Only routed evidence drives the dynamics. Slider settings alone must not
+  // compress the entire tab and mask the category-specific audible changes.
   const routedSafety = Math.max(
     harsh * input.routes.harsh,
     glass * input.envelopes.glass,
     clatter * input.envelopes.clatter,
     applause * input.envelopes.applause,
     loudness * input.envelopes.loudness,
-    background * input.neuralMix * 0.35,
+    background * input.neuralMix * 0.30,
   );
 
   return {
@@ -415,6 +433,6 @@ export function computeDynamicProfile(input: {
     compressorRelease: 0.085 + impact * 0.16,
     limiterThresholdDb: -4.0 * routedSafety,
     limiterRatio: 1 + routedSafety * 20,
-    presenceDb: clamp(input.neuralMix * (0.48 + background * 1.65) - harsh * 0.34, 0, 2.4),
+    presenceDb: clamp(input.neuralMix * (0.50 + background * 1.7) - harsh * 0.34, 0, 2.4),
   };
 }
