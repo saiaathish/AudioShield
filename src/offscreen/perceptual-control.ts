@@ -64,8 +64,31 @@ export interface DynamicProfile {
   presenceDb: number;
 }
 
-/** Exact linear 0-100 control. There are intentionally no knees or dead zones. */
+/** Exact 0-100 input representation. Every integer percentage remains distinct. */
 export const strengthToUnit = (strength: number): number => clamp(strength, 0, 100) / 100;
+
+/** Smooth perceptual drive with no threshold or plateau. */
+export const perceptualDrive = (strength: number): number => {
+  const unit = strengthToUnit(strength);
+  return Math.sin(unit * Math.PI / 2);
+};
+
+/** Route scores are evidence, not probabilities. Make medium/high evidence decisive. */
+export const routeDrive = (route: number): number => {
+  const unit = clamp(route);
+  return 1 - (1 - unit) ** 2;
+};
+
+/**
+ * Compose profile + master controls without the old double-attenuation problem.
+ * 0 stays 0, 100/100 stays 100, and every intermediate value remains unique.
+ */
+export function composeProtectionStrength(profileStrength: number, masterStrength: number): number {
+  const product = strengthToUnit(profileStrength) * strengthToUnit(masterStrength);
+  if (product <= 0) return 0;
+  if (product >= 1) return 100;
+  return (1 - Math.pow(1 - product, 1.55)) * 100;
+}
 
 /**
  * Both packaged suppressors buffer audio before returning enhanced samples.
@@ -81,7 +104,7 @@ export function neuralDelaySeconds(engine: "gtcrn" | "rnnoise" | "native-sensory
 }
 
 export const continuousNeuralMix = (backgroundStrength: number, backgroundRoute: number): number =>
-  strengthToUnit(backgroundStrength) * clamp(backgroundRoute);
+  perceptualDrive(backgroundStrength) * routeDrive(backgroundRoute);
 
 export function computeFrameStats(
   frequencies: Float32Array,
@@ -144,7 +167,7 @@ export function computeFrameStats(
       flatnessBins += 1;
       const previous = previousFrequencies?.[bin];
       if (Number.isFinite(previous)) {
-        flux += clamp((db - (previous as number)) / 24);
+        flux += clamp((db - (previous as number)) / 20);
         fluxBins += 1;
       }
     }
@@ -158,7 +181,7 @@ export function computeFrameStats(
   const geometricMean = Math.exp(flatnessLog / Math.max(1, flatnessBins));
   const arithmeticMean = flatnessPower / Math.max(1, flatnessBins);
   const spectralFlatness = clamp(geometricMean / Math.max(1e-12, arithmeticMean));
-  const spectralFlux = fluxBins ? clamp(flux / fluxBins * 3.4) : 0;
+  const spectralFlux = fluxBins ? clamp(flux / fluxBins * 4.1) : 0;
   const spectralCentroidHz = totalPower > 0 ? weightedFrequency / totalPower : 0;
 
   const harmonicStructure = clamp((0.38 - spectralFlatness) / 0.32);
@@ -177,39 +200,39 @@ export function computeFrameStats(
   );
 
   const glassConfidence = clamp(
-    spectralFlux * 1.45 +
-      (ultraHighRatio - 0.20) * 1.55 +
-      (highRatio - 0.34) * 0.72 +
-      (crest - 4.0) / 5.5 +
-      (peak - 0.15) * 0.55 +
-      clamp((spectralCentroidHz - 3200) / 6000) * 0.58 -
-      speechLikelihood * 0.24,
+    spectralFlux * 1.82 +
+      (ultraHighRatio - 0.17) * 1.82 +
+      (highRatio - 0.31) * 0.88 +
+      (crest - 3.7) / 4.8 +
+      (peak - 0.12) * 0.72 +
+      clamp((spectralCentroidHz - 2900) / 5600) * 0.66 -
+      speechLikelihood * 0.20,
   );
 
   const clatterConfidence = clamp(
-    (crest - 2.9) / 5.0 +
-      (highRatio - 0.29) * 1.32 +
-      spectralFlux * 0.82 +
-      (peak - 0.15) * 0.58 -
-      glassConfidence * 0.18,
+    (crest - 2.7) / 4.4 +
+      (highRatio - 0.27) * 1.45 +
+      spectralFlux * 0.98 +
+      (peak - 0.12) * 0.68 -
+      glassConfidence * 0.22,
   );
 
   const applauseConfidence = clamp(
-    (rms - 0.05) * 3.8 +
-      (highRatio - 0.25) * 0.88 +
-      spectralFlatness * 0.48 +
-      spectralFlux * 0.42 -
+    (rms - 0.045) * 4.2 +
+      (highRatio - 0.23) * 0.94 +
+      spectralFlatness * 0.52 +
+      spectralFlux * 0.48 -
       Math.max(0, crest - 6.8) * 0.06 -
-      glassConfidence * 0.24,
+      glassConfidence * 0.27,
   );
 
   const harshConfidence = clamp(
-    (highRatio - 0.30) * 1.45 +
-      clamp((spectralCentroidHz - 2800) / 5200) * 0.72 +
-      spectralFlatness * 0.22,
+    (highRatio - 0.27) * 1.58 +
+      clamp((spectralCentroidHz - 2600) / 5000) * 0.80 +
+      spectralFlatness * 0.24,
   );
 
-  const loudnessConfidence = clamp((peak - 0.40) / 0.50 + (rms - 0.10) * 1.95);
+  const loudnessConfidence = clamp((peak - 0.34) / 0.48 + (rms - 0.085) * 2.2);
 
   return {
     peak,
@@ -237,13 +260,13 @@ export function findToneCandidates(
   maxCandidates = 3,
 ): ToneCandidate[] {
   const binHz = sampleRate / fftSize;
-  const lower = Math.max(1, Math.floor(520 / binHz));
-  const upper = Math.min(frequencies.length - 2, Math.ceil(6200 / binHz));
+  const lower = Math.max(1, Math.floor(480 / binHz));
+  const upper = Math.min(frequencies.length - 2, Math.ceil(7000 / binHz));
   const raw: Array<{ bin: number; score: number }> = [];
 
   for (let bin = lower + 5; bin < upper - 5; bin += 1) {
     const level = frequencies[bin] ?? -120;
-    if (!Number.isFinite(level) || level < -60) continue;
+    if (!Number.isFinite(level) || level < -66) continue;
     let neighbor = 0;
     let count = 0;
     for (let offset = -7; offset <= 7; offset += 1) {
@@ -256,13 +279,13 @@ export function findToneCandidates(
     }
     if (!count) continue;
     const score = level - neighbor / count;
-    if (score >= 6.8) raw.push({ bin, score });
+    if (score >= 4.8) raw.push({ bin, score });
   }
 
   raw.sort((a, b) => b.score - a.score);
   const selected: Array<{ bin: number; score: number }> = [];
   for (const candidate of raw) {
-    if (selected.some((item) => Math.abs(item.bin - candidate.bin) * binHz < 150)) continue;
+    if (selected.some((item) => Math.abs(item.bin - candidate.bin) * binHz < 125)) continue;
     selected.push(candidate);
     if (selected.length >= maxCandidates) break;
   }
@@ -270,7 +293,7 @@ export function findToneCandidates(
   return selected.map((candidate) => ({
     frequencyHz: candidate.bin * binHz,
     scoreDb: candidate.score,
-    confidence: clamp((candidate.score - 6.8) / 15),
+    confidence: clamp((candidate.score - 4.8) / 10.5),
   }));
 }
 
@@ -278,43 +301,62 @@ export function updateToneTracker(previous: ToneTracker, candidate?: ToneCandida
   if (!candidate) {
     return {
       frequencyHz: previous.frequencyHz,
-      confidence: previous.confidence * 0.58,
+      confidence: previous.confidence * 0.68,
       persistence: Math.max(0, previous.persistence - 1),
     };
   }
 
-  const toleranceHz = Math.max(155, previous.frequencyHz * 0.09);
+  const toleranceHz = Math.max(175, previous.frequencyHz * 0.12);
   const sameTone = previous.persistence > 0 && Math.abs(candidate.frequencyHz - previous.frequencyHz) <= toleranceHz;
   if (!sameTone) {
     return { frequencyHz: candidate.frequencyHz, confidence: candidate.confidence, persistence: 1 };
   }
 
   return {
-    frequencyHz: previous.frequencyHz * 0.72 + candidate.frequencyHz * 0.28,
-    confidence: clamp(previous.confidence * 0.60 + candidate.confidence * 0.40),
-    persistence: Math.min(10, previous.persistence + 1),
+    frequencyHz: previous.frequencyHz * 0.66 + candidate.frequencyHz * 0.34,
+    confidence: clamp(previous.confidence * 0.52 + candidate.confidence * 0.48),
+    persistence: Math.min(12, previous.persistence + 1),
   };
 }
 
+function harmonicStackPenalty(stableTones: readonly ToneTracker[]): number {
+  if (stableTones.length < 2) return 0;
+  const sorted = [...stableTones].sort((a, b) => a.frequencyHz - b.frequencyHz);
+  const base = sorted[0]?.frequencyHz ?? 0;
+  if (base <= 0 || base > 950) return 0;
+
+  let harmonicMatches = 0;
+  for (const tone of sorted.slice(1)) {
+    const ratio = tone.frequencyHz / base;
+    const nearest = Math.round(ratio);
+    if (nearest >= 2 && nearest <= 6 && Math.abs(ratio - nearest) <= 0.065) harmonicMatches += 1;
+  }
+  if (!harmonicMatches) return 0;
+  return Math.min(0.58, 0.36 + harmonicMatches * 0.11);
+}
+
 export function computeSensoryRoutes(stats: FrameStats, toneTrackers: readonly ToneTracker[]): SensoryRoutes {
-  const stableTones = toneTrackers.filter((tracker) => tracker.persistence >= 2 && tracker.confidence >= 0.12);
+  const stableTones = toneTrackers.filter((tracker) => tracker.persistence >= 2 && tracker.confidence >= 0.10);
   const strongestTone = stableTones.reduce((best, tracker) => Math.max(
     best,
-    tracker.confidence * clamp((tracker.persistence - 1) / 4),
+    tracker.confidence * (0.48 + 0.52 * clamp((tracker.persistence - 1) / 4)),
   ), 0);
-  const multiToneBonus = stableTones.length >= 2 ? Math.min(0.16, (stableTones.length - 1) * 0.08) : 0;
-  const alarm = clamp(strongestTone + multiToneBonus);
-  const glass = stats.glassConfidence;
-  const clatter = clamp(stats.clatterConfidence * (1 - glass * 0.58));
-  const applause = clamp(stats.applauseConfidence * (1 - glass * 0.48));
-  const harsh = stats.harshConfidence;
-  const loudness = stats.loudnessConfidence;
-  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness);
+  const multiToneBonus = stableTones.length >= 2 ? Math.min(0.22, (stableTones.length - 1) * 0.11) : 0;
 
-  // Foreground events explicitly pre-empt broad denoising. This is the core
-  // routing rule that stops a house alarm or glass break from being treated as
-  // generic background noise simply because the neural denoiser can remove it.
-  const background = clamp(stats.backgroundConfidence * (1 - foregroundDominance * 0.96));
+  const musicPenalty = harmonicStackPenalty(stableTones);
+  const structuredAudioGuard = 1 - stats.speechLikelihood * 0.28;
+  const alarmRaw = clamp((strongestTone * 1.22 + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
+  const alarm = routeDrive(alarmRaw);
+
+  const glass = routeDrive(stats.glassConfidence);
+  const clatter = routeDrive(stats.clatterConfidence * (1 - glass * 0.62));
+  const applause = routeDrive(stats.applauseConfidence * (1 - glass * 0.52));
+  const harsh = routeDrive(stats.harshConfidence);
+  const loudness = routeDrive(stats.loudnessConfidence);
+  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness, harsh * 0.62);
+
+  const backgroundBase = routeDrive(stats.backgroundConfidence);
+  const background = clamp(backgroundBase * (1 - foregroundDominance) ** 2.4);
 
   return { background, alarm, glass, clatter, applause, harsh, loudness, foregroundDominance };
 }
@@ -337,49 +379,54 @@ export function computeDynamicProfile(input: {
   routes: SensoryRoutes;
   neuralMix: number;
 }): DynamicProfile {
-  const harsh = strengthToUnit(input.harshStrength);
-  const glass = strengthToUnit(input.glassStrength);
-  const clatter = strengthToUnit(input.clatterStrength);
-  const applause = strengthToUnit(input.applauseStrength);
-  const loudness = strengthToUnit(input.loudnessStrength);
-  const background = strengthToUnit(input.backgroundStrength);
-  const speechGuard = 1 - input.stats.speechLikelihood * 0.48;
+  const harsh = perceptualDrive(input.harshStrength);
+  const glass = perceptualDrive(input.glassStrength);
+  const clatter = perceptualDrive(input.clatterStrength);
+  const applause = perceptualDrive(input.applauseStrength);
+  const loudness = perceptualDrive(input.loudnessStrength);
+  const background = perceptualDrive(input.backgroundStrength);
+  const speechGuard = 1 - input.stats.speechLikelihood * 0.24;
 
   const dynamicHighCut = (
-    input.envelopes.glass * glass * 8.8 +
-    input.envelopes.clatter * clatter * 6.0 +
-    input.envelopes.applause * applause * 4.0
+    input.envelopes.glass * glass * 16.0 +
+    input.envelopes.clatter * clatter * 10.0 +
+    input.envelopes.applause * applause * 6.0
   ) * speechGuard;
-  const steadyHarshCut = harsh * input.routes.harsh * 7.8;
-  const highShelfDb = -Math.min(14, steadyHarshCut + dynamicHighCut);
+  const steadyHarshCut = harsh * input.routes.harsh * 11.0;
+  const highShelfDb = -Math.min(20, steadyHarshCut + dynamicHighCut);
 
-  const transientDb = -Math.min(7.5, (
-    input.envelopes.glass * glass * 5.8 +
-    input.envelopes.clatter * clatter * 3.4 +
-    input.envelopes.applause * applause * 1.9 +
-    input.envelopes.loudness * loudness * 4.8
+  const transientDb = -Math.min(13, (
+    input.envelopes.glass * glass * 11.0 +
+    input.envelopes.clatter * clatter * 6.8 +
+    input.envelopes.applause * applause * 3.4 +
+    input.envelopes.loudness * loudness * 8.8
   ) * speechGuard);
 
   const impact = clamp(
-    input.envelopes.glass * glass * 0.95 +
-    input.envelopes.clatter * clatter * 0.68 +
-    input.envelopes.applause * applause * 0.42 +
-    input.envelopes.loudness * loudness,
+    input.envelopes.glass * glass * 1.15 +
+    input.envelopes.clatter * clatter * 0.82 +
+    input.envelopes.applause * applause * 0.50 +
+    input.envelopes.loudness * loudness * 1.10,
   );
 
-  const safetyAmount = Math.max(harsh, glass, clatter, applause, loudness, background);
+  const routedSafety = Math.max(
+    harsh * input.routes.harsh,
+    glass * input.envelopes.glass,
+    clatter * input.envelopes.clatter,
+    applause * input.envelopes.applause,
+    loudness * input.envelopes.loudness,
+    background * input.neuralMix * 0.30,
+  );
 
   return {
     highShelfDb,
     transientGain: dbToGain(transientDb),
-    // At zero strength these are exactly transparent (threshold 0, ratio 1).
-    compressorThresholdDb: -18 * impact,
-    compressorRatio: 1 + impact * 4.1,
-    compressorAttack: 0.010 - impact * 0.0075,
-    compressorRelease: 0.095 + impact * 0.13,
-    limiterThresholdDb: -1.7 * safetyAmount,
-    limiterRatio: 1 + safetyAmount * 15,
-    // Presence restoration scales continuously with the actual neural mix.
-    presenceDb: clamp(input.neuralMix * (0.42 + background * 1.55) - harsh * 0.42, 0, 2.0),
+    compressorThresholdDb: -24 * impact,
+    compressorRatio: 1 + impact * 6.5,
+    compressorAttack: 0.007 - impact * 0.0055,
+    compressorRelease: 0.085 + impact * 0.16,
+    limiterThresholdDb: -4.0 * routedSafety,
+    limiterRatio: 1 + routedSafety * 20,
+    presenceDb: clamp(input.neuralMix * (0.50 + background * 1.7) - harsh * 0.34, 0, 2.4),
   };
 }
