@@ -136,8 +136,6 @@ export function createAudioRuntime(
         await separator.initialize();
 
         stage = "PROCESSOR_CREATE";
-        // Web Audio forbids both ScriptProcessor channel counts being zero. Two channels
-        // preserves normal stereo media (including YouTube) while mono inputs are up-mixed.
         processor = context.createScriptProcessor(1024, 2, 2);
         processor.onaudioprocess = (event) => {
           const inputChannels = Math.max(1, event.inputBuffer.numberOfChannels);
@@ -151,17 +149,18 @@ export function createAudioRuntime(
 
             if (!bypassed && alarmEnabled) {
               try {
+                const strength = Math.max(0, Math.min(100, alarmStrength));
                 const result = separator?.processSync?.({
                   frame: { sampleRate: event.inputBuffer.sampleRate, channels: 1, samples: input },
                   targetClassId: "alarm-siren",
-                  attenuationDb: -(6 + (Math.max(0, Math.min(100, alarmStrength)) / 100) * 12),
+                  attenuationDb: -(strength / 100) * 18,
                 });
                 if (result) {
                   samples = result.frame.samples;
                   if (channel === 0) eventResult = result;
                 }
               } catch {
-                samples = input; // Frame-level failures fail open to audible passthrough.
+                samples = input;
               }
             }
 
