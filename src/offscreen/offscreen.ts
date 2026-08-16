@@ -21,6 +21,8 @@ chrome.runtime.onMessage.addListener((message: {
   if (message.type === "BYPASS_SET") void runtime.setBypass(Boolean((message as { enabled?: boolean }).enabled));
   if (message.type === "PROTECTION_RULES_UPDATE") {
     const alarm = message.rules?.find((rule) => rule.id === "alarm-siren");
-    runtime.setRules(Boolean(alarm?.enabled), Math.min(alarm?.strength ?? 78, message.masterStrength ?? 100));
+    const triggerStrength = Math.max(0, Math.min(100, alarm?.strength ?? 78));
+    const masterStrength = Math.max(0, Math.min(100, message.masterStrength ?? 100));
+    runtime.setRules(Boolean(alarm?.enabled), triggerStrength * masterStrength / 100);
   }
 });
