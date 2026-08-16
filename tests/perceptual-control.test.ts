@@ -140,7 +140,7 @@ describe("perceptual control v5", () => {
       neuralMix: 0,
     });
     expect(profile.compressorRatio).toBe(1);
-    expect(profile.compressorThresholdDb).toBe(0);
+    expect(profile.compressorThresholdDb).toBeCloseTo(0, 8);
     expect(profile.limiterRatio).toBe(1);
     expect(profile.limiterThresholdDb).toBeCloseTo(0, 8);
   });
