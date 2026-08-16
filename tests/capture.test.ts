@@ -85,28 +85,48 @@ describe("offscreen tab playback", () => {
     expect(statuses).toEqual(["capturing", "unavailable", "bypassed", "capturing"]);
   });
 
-  it("uses one hybrid processing route when the context supports processing", async () => {
+  it("uses one valid stereo processing route and applies live bypass/rule changes", async () => {
     const stream = fakeStream();
     const source = { connect: vi.fn(), disconnect: vi.fn() };
-    const processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null as ((event: unknown) => void) | null };
+    const processor = { connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null as ((event: any) => void) | null };
     const context = { destination: {}, createMediaStreamSource: vi.fn(() => source), createScriptProcessor: vi.fn(() => processor), resume: vi.fn(async () => undefined), close: vi.fn(async () => undefined) };
     const runtime = createAudioRuntime(vi.fn(async () => stream), () => context);
     const statuses: string[] = [];
+    const events: Array<{ attenuationDb?: number }> = [];
     runtime.onStatus((status) => statuses.push(status.state));
-    await runtime.start("hybrid-stream");
+    runtime.onSensoryEvent((event) => events.push(event));
+    await runtime.start("hybrid-stream", 7);
     expect(source.connect).toHaveBeenCalledWith(processor);
     expect(processor.connect).toHaveBeenCalledWith(context.destination);
-    expect(context.createScriptProcessor).toHaveBeenCalledWith(1024, 0, 0);
+    expect(context.createScriptProcessor).toHaveBeenCalledWith(1024, 2, 2);
     expect(statuses).toEqual(["capturing", "protecting"]);
-    const speech = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 2 * index / 64) * 0.4);
-    const transient = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 20 * index / 64) * 0.4);
+
+    const sampleRate = 16_000;
+    const alarm = Float32Array.from({ length: 1024 }, (_, index) =>
+      0.18 * Math.sin(2 * Math.PI * 180 * index / sampleRate) + 0.42 * Math.sin(2 * Math.PI * 1200 * index / sampleRate));
     const run = (input: Float32Array) => {
-      const output = new Float32Array(input.length);
-      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input, sampleRate: 16_000, numberOfChannels: 1 }, outputBuffer: { getChannelData: () => output, numberOfChannels: 1 } });
-      return output;
+      const left = new Float32Array(input.length);
+      const right = new Float32Array(input.length);
+      processor.onaudioprocess?.({
+        inputBuffer: { getChannelData: () => input, sampleRate, numberOfChannels: 1 },
+        outputBuffer: { getChannelData: (channel: number) => channel === 0 ? left : right, numberOfChannels: 2 },
+      });
+      return left;
     };
-    expect(run(speech)).toEqual(speech);
-    expect(run(transient)).not.toEqual(transient);
+
+    const protectedOutput = run(alarm);
+    expect(protectedOutput).not.toEqual(alarm);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].attenuationDb).toBeLessThan(0);
+
+    await runtime.setBypass(true);
+    expect(run(alarm)).toEqual(alarm);
+    await runtime.setBypass(false);
+    runtime.setRules(false, 78);
+    expect(run(alarm)).toEqual(alarm);
+    runtime.setRules(true, 100);
+    expect(run(alarm)).not.toEqual(alarm);
+
     await runtime.stop();
     expect(source.disconnect).toHaveBeenCalledTimes(1);
     expect(processor.disconnect).toHaveBeenCalledTimes(1);
@@ -126,7 +146,7 @@ describe("background capture lifecycle", () => {
       },
       tabs: { query: vi.fn(async () => [{ id: 12 }]), onRemoved: { addListener: (listener: (tabId: number) => Promise<void>) => removed.push(listener) } },
       tabCapture: { getMediaStreamId: vi.fn((_options: unknown, callback: (streamId: string) => void) => callback("stream-1")) },
-      offscreen: { Reason: { AUDIO_PLAYBACK: "AUDIO_PLAYBACK" }, hasDocument: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true), createDocument: vi.fn(async () => undefined), closeDocument: vi.fn(async () => undefined) },
+      offscreen: { Reason: { AUDIO_PLAYBACK: "AUDIO_PLAYBACK", USER_MEDIA: "USER_MEDIA" }, hasDocument: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true), createDocument: vi.fn(async () => undefined), closeDocument: vi.fn(async () => undefined) },
     };
     vi.stubGlobal("chrome", chromeMock);
     const { startProtection, stopProtection } = await import("../src/background/service-worker");
@@ -134,9 +154,8 @@ describe("background capture lifecycle", () => {
     await startProtection(7);
     expect(chromeMock.tabCapture.getMediaStreamId).toHaveBeenCalledTimes(1);
     expect(chromeMock.offscreen.createDocument).toHaveBeenCalledTimes(1);
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: "OFFSCREEN_START", streamId: "stream-1" });
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: "OFFSCREEN_START", streamId: "stream-1", tabId: 7 });
     expect(removed).toHaveLength(1);
-    // Invoke the same cleanup path used by tabs.onRemoved; direct call keeps the mock deterministic.
     await stopProtection(7);
     expect(chromeMock.offscreen.closeDocument).toHaveBeenCalledTimes(1);
     await stopProtection();
@@ -149,5 +168,5 @@ describe("background capture lifecycle", () => {
 });
 
 // Manual Chrome check (requires a real user gesture): load unpacked build; open HTML5/YouTube media;
-// click Protect this tab; verify tab remains audible; close/reopen UI; stop; repeat 10 cycles; close tab;
-// inspect chrome://webrtc-internals or DevTools to confirm one output route and no raw-audio requests.
+// click the AudioShield toolbar icon once; verify tab remains audible; toggle Alarm and Bypass live;
+// close/reopen UI; repeat 5 cycles; inspect the service-worker/offscreen consoles for runtime errors.

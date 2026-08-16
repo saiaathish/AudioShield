@@ -8,13 +8,22 @@ export interface SeparatorRequest {
   readonly attenuationDb?: number;
 }
 
+export interface SeparatorDiagnostics {
+  readonly metricsAvailable: false;
+  readonly method: "dsp-hybrid";
+  readonly reason: "no-reference-stems";
+  readonly detected?: boolean;
+  readonly confidence?: number;
+  readonly dominantFrequencyHz?: number;
+}
+
 export interface SeparatorResult {
   readonly frame: AudioFrame;
   readonly backend: SeparatorBackend;
   readonly targetAttenuationDb: number;
   readonly speechPreservationDb: number;
   readonly latencyMs: number;
-  readonly diagnostics?: { readonly metricsAvailable: false; readonly method: "dsp-hybrid"; readonly reason: "no-reference-stems" };
+  readonly diagnostics?: SeparatorDiagnostics;
 }
 
 export interface SeparatorEngine {
