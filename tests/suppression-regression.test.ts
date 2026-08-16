@@ -15,6 +15,7 @@ import {
   alarmStemMix,
   alarmStrengthDrive,
   stemRouteMix,
+  voicePreservingStemMix,
 } from "../src/offscreen/sensory-engine";
 
 const frame = (overrides: Partial<FrameStats> = {}): FrameStats => ({
@@ -133,6 +134,22 @@ describe("suppression regression guard", () => {
     expect(stemRouteMix(100, 0.95, 1.2)).toBeGreaterThan(0.99);
   });
 
+  it("keeps voices natural without creating a new strength threshold", () => {
+    expect(voicePreservingStemMix(0, 1)).toBe(0);
+    expect(voicePreservingStemMix(1, 0)).toBe(1);
+    expect(voicePreservingStemMix(1, 1)).toBeCloseTo(0.82, 8);
+
+    let previous = -1;
+    for (let value = 0; value <= 100; value += 1) {
+      const mix = voicePreservingStemMix(value / 100, 0.9);
+      expect(mix).toBeGreaterThan(previous);
+      previous = mix;
+    }
+
+    expect(voicePreservingStemMix(0.75, 0.9)).toBeLessThan(0.75);
+    expect(voicePreservingStemMix(0.75, 0.9)).toBeGreaterThan(0.60);
+  });
+
   it("keeps persistent alarm tones dominant over generic background routing", () => {
     const stats = frame({ backgroundConfidence: 0.92, glassConfidence: 0, clatterConfidence: 0, applauseConfidence: 0, loudnessConfidence: 0 });
     const tones: ToneTracker[] = [
@@ -144,10 +161,13 @@ describe("suppression regression guard", () => {
     expect(routes.background).toBeLessThan(0.2);
   });
 
-  it("locks the last real-Chrome suppression cadence until a replacement is listening-tested", () => {
+  it("locks the last real-Chrome cadence and voice-rescue graph", () => {
     const source = fs.readFileSync("src/offscreen/sensory-engine.ts", "utf8");
     expect(source).toContain("analyser.fftSize = 2048");
     expect(source).toContain("setInterval(analyze, 70)");
+    expect(source).toContain("voicePreservingStemMix");
+    expect(source).toContain("voiceBody");
+    expect(source).toContain("voicePresence");
     expect(source).not.toContain("eventLookahead");
   });
 });
