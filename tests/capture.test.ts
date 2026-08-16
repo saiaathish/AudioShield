@@ -20,17 +20,13 @@ function fakeContext() {
   return { source, context: context as unknown as AudioContext };
 }
 
-function fakeGraph(engine: SensoryGraph["engine"] = "native-sensory"): SensoryGraph & {
-  setRules: ReturnType<typeof vi.fn>;
-  setBypass: ReturnType<typeof vi.fn>;
-  destroy: ReturnType<typeof vi.fn>;
-} {
+function fakeGraph(engine: SensoryGraph["engine"] = "native-sensory") {
   return {
     engine,
-    setRules: vi.fn(),
-    setBypass: vi.fn(),
-    destroy: vi.fn(),
-  };
+    setRules: vi.fn<(rules: readonly TriggerRule[], masterStrength: number) => void>(),
+    setBypass: vi.fn<(enabled: boolean) => void>(),
+    destroy: vi.fn<() => void>(),
+  } satisfies SensoryGraph;
 }
 
 describe("offscreen tab playback", () => {
