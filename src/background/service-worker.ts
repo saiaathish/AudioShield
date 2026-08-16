@@ -1,8 +1,9 @@
 type Session = { tabId: number; streamId: string };
+type EngineName = "gtcrn" | "rnnoise" | "native-sensory";
 type PublicStatus = {
   state: string;
   tabId?: number;
-  engine?: string;
+  engine?: EngineName;
   code?: string;
   stage?: string;
   rawName?: string;
@@ -15,6 +16,7 @@ type PublicStatus = {
 let session: Session | undefined;
 let creatingOffscreen: Promise<void> | undefined;
 let bypassed = false;
+let activeEngine: EngineName = "native-sensory";
 let lifecycle: Promise<void> = Promise.resolve();
 let lastStatus: PublicStatus = { state: "idle" };
 const OFFSCREEN_PATH = "offscreen/offscreen.html";
@@ -52,7 +54,7 @@ chrome.action.onClicked.addListener((tab) => {
 
   if (session?.tabId === tabId) {
     void chrome.sidePanel.open({ tabId } as Parameters<typeof chrome.sidePanel.open>[0]).catch((error) => reportSidePanelFailure(error));
-    void sendStatus({ state: bypassed ? "bypassed" : "protecting", tabId, ...(bypassed ? {} : { engine: "dsp-hybrid" }) });
+    void sendStatus({ state: bypassed ? "bypassed" : "protecting", tabId, ...(bypassed ? {} : { engine: activeEngine }) });
     return;
   }
 
@@ -79,9 +81,6 @@ function enqueue(task: () => Promise<void>): Promise<void> {
 async function hasOffscreenDocument(): Promise<boolean> {
   const offscreenApi = chrome.offscreen as typeof chrome.offscreen & { hasDocument?: () => Promise<boolean> };
   if (typeof offscreenApi.hasDocument === "function") return offscreenApi.hasDocument();
-
-  // Chrome 116+ supports runtime.getContexts(), which is the documented lifecycle check
-  // for releases before offscreen.hasDocument() was added in Chrome 150.
   const runtimeApi = chrome.runtime as typeof chrome.runtime & {
     getContexts?: (filter: { contextTypes: string[]; documentUrls: string[] }) => Promise<unknown[]>;
   };
@@ -145,12 +144,11 @@ function reportCaptureFailure(tabId: number, url: string, chromeMessage: string,
 
 async function consumeActionStream(tabId: number, streamId: string): Promise<void> {
   await enqueue(async () => {
-    // The stream ID is short-lived. Reuse the offscreen document while switching tabs
-    // instead of closing/recreating it after the ID has already been issued.
     if (session) await stopProtectionInternal(session.tabId, false, false);
     try {
       await ensureOffscreen();
       session = { tabId, streamId };
+      activeEngine = "native-sensory";
       await sendStatus({ state: "starting", tabId });
       await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId, tabId });
       if (bypassed) await chrome.runtime.sendMessage({ type: "BYPASS_SET", enabled: true });
@@ -169,6 +167,7 @@ async function closeOffscreen(): Promise<void> {
 async function stopProtectionInternal(tabId?: number, emitIdle = true, closeDocument = true): Promise<void> {
   if (!session || (tabId !== undefined && session.tabId !== tabId)) return;
   session = undefined;
+  activeEngine = "native-sensory";
   await chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP" }).catch(() => undefined);
   if (closeDocument) await closeOffscreen();
   if (emitIdle) await sendStatus({ state: "idle" });
@@ -185,6 +184,7 @@ async function startProtectionInternal(requestedTabId?: number): Promise<void> {
     await ensureOffscreen();
     offscreenReady = true;
     session = { tabId, streamId };
+    activeEngine = "native-sensory";
     await sendStatus({ state: "starting", tabId });
     await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId, tabId });
     if (bypassed) await chrome.runtime.sendMessage({ type: "BYPASS_SET", enabled: true });
@@ -217,7 +217,7 @@ chrome.runtime.onMessage.addListener((message: { type: string; tabId?: number })
     void chrome.runtime.sendMessage({ type: "BYPASS_SET", enabled: bypassed }).catch(() => undefined);
     if (session) void sendStatus(bypassed
       ? { state: "bypassed", tabId: session.tabId }
-      : { state: "protecting", tabId: session.tabId, engine: "dsp-hybrid" });
+      : { state: "protecting", tabId: session.tabId, engine: activeEngine });
   }
 
   if (message.type === "PROTECTION_RULES_UPDATE") {
@@ -229,7 +229,7 @@ chrome.tabs.onRemoved.addListener((tabId) => void stopProtection(tabId));
 
 chrome.runtime.onMessage.addListener((message: {
   type: string;
-  status?: { state: string; code?: string; stage?: string; rawName?: string; rawMessage?: string; chromeMessage?: string };
+  status?: { state: string; engine?: EngineName; code?: string; stage?: string; rawName?: string; rawMessage?: string; chromeMessage?: string };
 }) => {
   if (message.type !== "OFFSCREEN_STATUS" || !message.status) return;
   const tabId = session?.tabId;
@@ -243,7 +243,8 @@ chrome.runtime.onMessage.addListener((message: {
     return;
   }
   if (message.status.state === "protecting") {
-    if (tabId !== undefined) void sendStatus({ state: "protecting", tabId, engine: "dsp-hybrid" });
+    activeEngine = message.status.engine ?? "native-sensory";
+    if (tabId !== undefined) void sendStatus({ state: "protecting", tabId, engine: activeEngine });
     return;
   }
   if (message.status.state === "bypassed") {
@@ -251,7 +252,7 @@ chrome.runtime.onMessage.addListener((message: {
     return;
   }
   if (message.status.state === "unavailable") {
-    if (tabId !== undefined) void sendStatus({ state: "unavailable", tabId, code: "SEPARATOR_UNAVAILABLE" });
+    if (tabId !== undefined) void sendStatus({ state: "unavailable", tabId, code: "SENSORY_ENGINE_UNAVAILABLE", rawMessage: message.status.rawMessage });
     return;
   }
   if (message.status.state === "error") {
