@@ -1,5 +1,16 @@
 import type { SensoryEvent } from "../shared/events/types";
 import type { TriggerId, TriggerRule } from "../shared/settings/types";
+import {
+  clamp,
+  computeDynamicProfile,
+  computeFrameStats,
+  findToneCandidates,
+  updateEnvelope,
+  updateToneTracker,
+  type EventEnvelopes,
+  type FrameStats,
+  type ToneTracker,
+} from "./perceptual-control";
 
 export type SensoryEngineName = "gtcrn" | "rnnoise" | "native-sensory";
 
@@ -13,9 +24,6 @@ export interface SensoryGraph {
 type DestroyableAudioNode = AudioNode & { destroy?: () => void };
 type EmitEvent = (event: SensoryEvent) => void;
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
-const dbToPower = (db: number) => 10 ** (db / 10);
-
 function setParam(param: AudioParam, value: number, context: AudioContext, timeConstant = 0.015): void {
   const safe = Number.isFinite(value) ? value : param.value;
   try {
@@ -28,9 +36,6 @@ function setParam(param: AudioParam, value: number, context: AudioContext, timeC
 
 async function createNeuralNode(context: AudioContext): Promise<{ node: DestroyableAudioNode; engine: SensoryEngineName } | null> {
   const url = (path: string) => chrome.runtime.getURL(path);
-
-  // Keep the browser-only AudioWorklet classes out of Node/Vitest module
-  // evaluation. They are loaded only inside the real offscreen browser context.
   const suppressor = await import("@sapphi-red/web-noise-suppressor");
 
   try {
@@ -61,12 +66,15 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield's release graph deliberately avoids ScriptProcessorNode.
+ * AudioShield v2 quality graph.
  *
- * The speech-first denoiser is provided by the MIT-licensed
- * @sapphi-red/web-noise-suppressor AudioWorklet package (GTCRN first,
- * RNNoise fallback). Perceptual sensory controls use browser-native Web Audio
- * nodes so heavy JS never runs in the realtime rendering callback.
+ * Layer 1: GTCRN AudioWorklet neural denoising, with RNNoise fallback.
+ * Layer 2: event-adaptive sensory suppression. Clatter, applause and loudness
+ *          no longer impose permanent EQ/compression on clean content.
+ * Layer 3: transparent post-processing: presence recovery + safety limiting.
+ *
+ * Heavy realtime work stays in native Web Audio / AudioWorklet. The JS timer
+ * only updates control-rate parameters and never touches PCM render callbacks.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -76,27 +84,36 @@ export async function createSensoryGraph(
 ): Promise<SensoryGraph> {
   const neural = await createNeuralNode(context);
 
-  const dryGain = context.createGain();
+  const bypassGain = context.createGain();
   const wetGain = context.createGain();
   const neuralDryGain = context.createGain();
   const neuralWetGain = context.createGain();
   const merge = context.createGain();
+  const presence = context.createBiquadFilter();
   const harshShelf = context.createBiquadFilter();
   const toneA = context.createBiquadFilter();
   const toneB = context.createBiquadFilter();
+  const transientGain = context.createGain();
   const compressor = context.createDynamicsCompressor();
+  const limiter = context.createDynamicsCompressor();
   const analyser = context.createAnalyser();
   const analysisSink = context.createGain();
 
-  dryGain.gain.value = 0;
+  bypassGain.gain.value = 0;
   wetGain.gain.value = 1;
   neuralDryGain.gain.value = neural ? 0 : 1;
   neuralWetGain.gain.value = neural ? 1 : 0;
+  transientGain.gain.value = 1;
   analysisSink.gain.value = 0;
 
+  presence.type = "peaking";
+  presence.frequency.value = 2200;
+  presence.Q.value = 0.72;
+  presence.gain.value = 0;
+
   harshShelf.type = "highshelf";
-  harshShelf.frequency.value = 3600;
-  harshShelf.gain.value = -3;
+  harshShelf.frequency.value = 3800;
+  harshShelf.gain.value = 0;
 
   for (const tone of [toneA, toneB]) {
     tone.type = "peaking";
@@ -105,22 +122,30 @@ export async function createSensoryGraph(
     tone.gain.value = 0;
   }
 
-  compressor.threshold.value = -10;
-  compressor.knee.value = 6;
-  compressor.ratio.value = 2.5;
-  compressor.attack.value = 0.004;
-  compressor.release.value = 0.12;
+  // The old graph held aggressive compression whenever a trigger was enabled.
+  // v2 idles almost transparent and raises compression only around actual events.
+  compressor.threshold.value = -5.5;
+  compressor.knee.value = 8;
+  compressor.ratio.value = 1.25;
+  compressor.attack.value = 0.008;
+  compressor.release.value = 0.11;
+
+  // Safety limiter catches post-EQ peaks without acting as the primary compressor.
+  limiter.threshold.value = -1.5;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 16;
+  limiter.attack.value = 0.0015;
+  limiter.release.value = 0.06;
 
   analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.62;
+  analyser.smoothingTimeConstant = 0.58;
   analyser.minDecibels = -100;
-  analyser.maxDecibels = -10;
+  analyser.maxDecibels = -8;
 
-  // Hard bypass branch. It stays connected so bypass never rebuilds the graph.
-  source.connect(dryGain);
-  dryGain.connect(context.destination);
+  // Bypass remains permanently wired. We only crossfade gains; no graph rebuild.
+  source.connect(bypassGain);
+  bypassGain.connect(context.destination);
 
-  // Speech-first neural layer can be cross-switched without reconnecting.
   source.connect(neuralDryGain);
   neuralDryGain.connect(merge);
   if (neural) {
@@ -129,15 +154,17 @@ export async function createSensoryGraph(
     neuralWetGain.connect(merge);
   }
 
-  merge.connect(harshShelf);
+  merge.connect(presence);
+  presence.connect(harshShelf);
   harshShelf.connect(toneA);
   toneA.connect(toneB);
-  toneB.connect(compressor);
-  compressor.connect(wetGain);
+  toneB.connect(transientGain);
+  transientGain.connect(compressor);
+  compressor.connect(limiter);
+  limiter.connect(wetGain);
   wetGain.connect(context.destination);
 
-  // Analysis is a zero-gain native branch. AnalyserNode performs its FFT in the
-  // browser engine, avoiding the expensive JS DFT that caused audible underruns.
+  // Zero-gain analyser branch keeps detection off the realtime render callback.
   source.connect(analyser);
   analyser.connect(analysisSink);
   analysisSink.connect(context.destination);
@@ -145,6 +172,13 @@ export async function createSensoryGraph(
   let destroyed = false;
   let masterStrength = 65;
   let rules: readonly TriggerRule[] = [];
+  let lastStats: FrameStats | undefined;
+  let envelopes: EventEnvelopes = { clatter: 0, applause: 0, loudness: 0 };
+  let toneTrackers: [ToneTracker, ToneTracker] = [
+    { frequencyHz: 0, confidence: 0, persistence: 0 },
+    { frequencyHz: 0, confidence: 0, persistence: 0 },
+  ];
+
   const lastEventAt = new Map<TriggerId, number>();
   const frequencies = new Float32Array(analyser.frequencyBinCount);
   const waveform = new Float32Array(analyser.fftSize);
@@ -162,7 +196,7 @@ export async function createSensoryGraph(
     lastEventAt.set(id, now);
     emitEvent({
       triggerId: id,
-      confidence: clamp(confidence, 0, 1),
+      confidence: clamp(confidence),
       timestamp: now,
       tabId,
       attenuationDb,
@@ -171,25 +205,41 @@ export async function createSensoryGraph(
     });
   };
 
+  const neuralIsActive = () => Boolean(neural) && effective("background-noise") >= 8;
+
+  const applyNeuralRouting = () => {
+    if (!neural) return;
+    const active = neuralIsActive();
+    // GTCRN has algorithmic latency, so avoid a permanent dry/wet parallel blend
+    // that would comb-filter speech. Use a smoothed route switch instead.
+    setParam(neuralWetGain.gain, active ? 1 : 0, context, 0.035);
+    setParam(neuralDryGain.gain, active ? 0 : 1, context, 0.035);
+  };
+
+  const applyDynamicProfile = (stats: FrameStats) => {
+    const profile = computeDynamicProfile({
+      harshStrength: effective("harsh-highs"),
+      clatterStrength: effective("dishes-clatter"),
+      applauseStrength: effective("applause"),
+      loudnessStrength: effective("sudden-loudness"),
+      backgroundStrength: effective("background-noise"),
+      stats,
+      envelopes,
+      neuralActive: neuralIsActive(),
+    });
+
+    setParam(presence.gain, profile.presenceDb, context, 0.055);
+    setParam(harshShelf.gain, profile.highShelfDb, context, 0.045);
+    setParam(transientGain.gain, profile.transientGain, context, 0.018);
+    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.035);
+    setParam(compressor.ratio, profile.compressorRatio, context, 0.035);
+    setParam(compressor.attack, profile.compressorAttack, context, 0.035);
+    setParam(compressor.release, profile.compressorRelease, context, 0.055);
+  };
+
   const applyRules = () => {
-    const neuralStrength = effective("background-noise");
-    if (neural) {
-      setParam(neuralWetGain.gain, neuralStrength > 0 ? 1 : 0, context, 0.025);
-      setParam(neuralDryGain.gain, neuralStrength > 0 ? 0 : 1, context, 0.025);
-    }
-
-    const harsh = effective("harsh-highs");
-    const clatter = effective("dishes-clatter");
-    const applause = effective("applause");
-    const highBandCut = -Math.min(14, harsh * 0.09 + clatter * 0.045 + applause * 0.025);
-    setParam(harshShelf.gain, highBandCut, context, 0.03);
-
-    const loudness = effective("sudden-loudness");
-    const impact = Math.max(clatter, applause, loudness);
-    setParam(compressor.threshold, -8 - impact * 0.20, context, 0.03);
-    setParam(compressor.ratio, 1.5 + impact * 0.085, context, 0.03);
-    setParam(compressor.attack, Math.max(0.0015, 0.008 - impact * 0.00006), context, 0.03);
-    setParam(compressor.release, 0.09 + impact * 0.0011, context, 0.03);
+    applyNeuralRouting();
+    if (lastStats) applyDynamicProfile(lastStats);
   };
 
   const analyze = () => {
@@ -197,84 +247,59 @@ export async function createSensoryGraph(
     analyser.getFloatFrequencyData(frequencies);
     analyser.getFloatTimeDomainData(waveform);
 
-    const sampleRate = context.sampleRate;
-    const binHz = sampleRate / analyser.fftSize;
-    const alarmStrength = effective("alarm-siren");
-    const lower = Math.max(1, Math.floor(650 / binHz));
-    const upper = Math.min(frequencies.length - 2, Math.ceil(5200 / binHz));
-    const candidates: Array<{ bin: number; score: number; level: number }> = [];
+    const stats = computeFrameStats(frequencies, waveform, context.sampleRate, analyser.fftSize);
+    lastStats = stats;
 
-    for (let bin = lower + 4; bin < upper - 4; bin += 1) {
-      const level = frequencies[bin] ?? -120;
-      if (!Number.isFinite(level) || level < -58) continue;
-      let neighbor = 0;
-      let count = 0;
-      for (let offset = -5; offset <= 5; offset += 1) {
-        if (Math.abs(offset) <= 1) continue;
-        const value = frequencies[bin + offset];
-        if (Number.isFinite(value)) { neighbor += value; count += 1; }
-      }
-      if (!count) continue;
-      const score = level - neighbor / count;
-      if (score >= 7.5) candidates.push({ bin, score, level });
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-    const first = candidates[0];
-    const second = candidates.find((candidate) => first && Math.abs(candidate.bin - first.bin) * binHz > 180);
-    const selected = [first, second].filter(Boolean) as Array<{ bin: number; score: number; level: number }>;
-    const tones = [toneA, toneB];
-
-    for (let index = 0; index < tones.length; index += 1) {
-      const candidate = selected[index];
-      const tone = tones[index];
-      if (candidate && alarmStrength > 0) {
-        const frequency = candidate.bin * binHz;
-        const confidence = clamp((candidate.score - 7.5) / 15, 0, 1);
-        const attenuation = -Math.min(20, 3 + alarmStrength * 0.17 * (0.55 + confidence * 0.45));
-        setParam(tone.frequency, frequency, context, 0.018);
-        setParam(tone.Q, 9 + confidence * 10, context, 0.018);
-        setParam(tone.gain, attenuation, context, 0.018);
-        if (index === 0 && confidence >= 0.22) maybeEmit("alarm-siren", confidence, attenuation, frequency);
-      } else {
-        setParam(tone.gain, 0, context, 0.04);
-      }
-    }
-
-    let peak = 0;
-    let sumSq = 0;
-    for (const sample of waveform) {
-      const abs = Math.abs(sample);
-      peak = Math.max(peak, abs);
-      sumSq += sample * sample;
-    }
-    const rms = Math.sqrt(sumSq / Math.max(1, waveform.length));
-    const crest = peak / Math.max(1e-5, rms);
-
-    let highPower = 0;
-    let midPower = 0;
-    let highBins = 0;
-    let midBins = 0;
-    for (let bin = 1; bin < frequencies.length; bin += 1) {
-      const hz = bin * binHz;
-      const value = frequencies[bin] ?? -120;
-      if (!Number.isFinite(value)) continue;
-      if (hz >= 2400 && hz <= 10500) { highPower += dbToPower(value); highBins += 1; }
-      else if (hz >= 180 && hz < 2400) { midPower += dbToPower(value); midBins += 1; }
-    }
-    const highAverage = highPower / Math.max(1, highBins);
-    const midAverage = midPower / Math.max(1, midBins);
-    const highRatio = highAverage / Math.max(1e-12, highAverage + midAverage);
     const clatterStrength = effective("dishes-clatter");
-    if (clatterStrength > 0 && peak > 0.18 && crest > 3.1 && highRatio > 0.34) {
-      const confidence = clamp((crest - 3.1) / 5 + (highRatio - 0.34) * 1.3, 0, 1);
-      maybeEmit("dishes-clatter", confidence, harshShelf.gain.value);
+    const applauseStrength = effective("applause");
+    const loudnessStrength = effective("sudden-loudness");
+
+    envelopes = {
+      clatter: updateEnvelope(envelopes.clatter, clatterStrength > 0 ? stats.clatterConfidence : 0, 0.68),
+      applause: updateEnvelope(envelopes.applause, applauseStrength > 0 ? stats.applauseConfidence : 0, 0.86),
+      loudness: updateEnvelope(envelopes.loudness, loudnessStrength > 0 ? stats.loudnessConfidence : 0, 0.72),
+    };
+
+    if (clatterStrength > 0 && stats.clatterConfidence >= 0.22) {
+      maybeEmit("dishes-clatter", stats.clatterConfidence, -6 * envelopes.clatter);
+    }
+    if (applauseStrength > 0 && stats.applauseConfidence >= 0.28) {
+      maybeEmit("applause", stats.applauseConfidence, -4 * envelopes.applause);
+    }
+    if (loudnessStrength > 0 && stats.loudnessConfidence >= 0.28) {
+      maybeEmit("sudden-loudness", stats.loudnessConfidence, -5 * envelopes.loudness);
     }
 
-    const reduction = compressor.reduction;
-    if (effective("sudden-loudness") > 0 && Number.isFinite(reduction) && reduction < -2.5) {
-      maybeEmit("sudden-loudness", clamp(Math.abs(reduction) / 16, 0, 1), reduction);
+    const candidates = findToneCandidates(frequencies, context.sampleRate, analyser.fftSize, 2);
+    toneTrackers = [
+      updateToneTracker(toneTrackers[0], candidates[0]),
+      updateToneTracker(toneTrackers[1], candidates[1]),
+    ];
+
+    const alarmStrength = effective("alarm-siren");
+    const tones = [toneA, toneB];
+    for (let index = 0; index < tones.length; index += 1) {
+      const tracker = toneTrackers[index];
+      const tone = tones[index];
+      const stable = tracker.persistence >= 2 && tracker.confidence >= 0.16;
+      if (stable && alarmStrength > 0) {
+        const speechGuard = 1 - stats.speechLikelihood * 0.28;
+        const persistenceBonus = clamp((tracker.persistence - 1) / 4);
+        const attenuation = -Math.min(
+          19,
+          (2.5 + alarmStrength * 0.15 * (0.55 + tracker.confidence * 0.45)) *
+            (0.78 + persistenceBonus * 0.22) * speechGuard,
+        );
+        setParam(tone.frequency, tracker.frequencyHz, context, 0.025);
+        setParam(tone.Q, 10 + tracker.confidence * 9, context, 0.03);
+        setParam(tone.gain, attenuation, context, 0.028);
+        if (index === 0) maybeEmit("alarm-siren", tracker.confidence, attenuation, tracker.frequencyHz);
+      } else {
+        setParam(tone.gain, 0, context, 0.055);
+      }
     }
+
+    applyDynamicProfile(stats);
   };
 
   const timer = globalThis.setInterval(analyze, 80);
@@ -287,18 +312,33 @@ export async function createSensoryGraph(
       applyRules();
     },
     setBypass(enabled) {
-      setParam(dryGain.gain, enabled ? 1 : 0, context, 0.012);
-      setParam(wetGain.gain, enabled ? 0 : 1, context, 0.012);
+      setParam(bypassGain.gain, enabled ? 1 : 0, context, 0.014);
+      setParam(wetGain.gain, enabled ? 0 : 1, context, 0.014);
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       clearInterval(timer);
-      try { source.disconnect(dryGain); } catch { /* disconnected */ }
+      try { source.disconnect(bypassGain); } catch { /* disconnected */ }
       try { source.disconnect(neuralDryGain); } catch { /* disconnected */ }
       try { source.disconnect(analyser); } catch { /* disconnected */ }
       try { if (neural) source.disconnect(neural.node); } catch { /* disconnected */ }
-      for (const node of [dryGain, wetGain, neuralDryGain, neuralWetGain, merge, harshShelf, toneA, toneB, compressor, analyser, analysisSink]) {
+      for (const node of [
+        bypassGain,
+        wetGain,
+        neuralDryGain,
+        neuralWetGain,
+        merge,
+        presence,
+        harshShelf,
+        toneA,
+        toneB,
+        transientGain,
+        compressor,
+        limiter,
+        analyser,
+        analysisSink,
+      ]) {
         try { node.disconnect(); } catch { /* disconnected */ }
       }
       try { neural?.node.disconnect(); } catch { /* disconnected */ }
