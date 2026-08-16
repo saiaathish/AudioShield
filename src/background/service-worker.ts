@@ -17,6 +17,7 @@ let creatingOffscreen: Promise<void> | undefined;
 let bypassed = false;
 let lifecycle: Promise<void> = Promise.resolve();
 let lastStatus: PublicStatus = { state: "idle" };
+const OFFSCREEN_PATH = "offscreen/offscreen.html";
 
 async function disableAutomaticPanelAction(): Promise<void> {
   if (!chrome.sidePanel || typeof chrome.sidePanel.setPanelBehavior !== "function") return;
@@ -75,10 +76,27 @@ function enqueue(task: () => Promise<void>): Promise<void> {
   return next;
 }
 
+async function hasOffscreenDocument(): Promise<boolean> {
+  const offscreenApi = chrome.offscreen as typeof chrome.offscreen & { hasDocument?: () => Promise<boolean> };
+  if (typeof offscreenApi.hasDocument === "function") return offscreenApi.hasDocument();
+
+  // Chrome 116+ supports runtime.getContexts(), which is the documented lifecycle check
+  // for releases before offscreen.hasDocument() was added in Chrome 150.
+  const runtimeApi = chrome.runtime as typeof chrome.runtime & {
+    getContexts?: (filter: { contextTypes: string[]; documentUrls: string[] }) => Promise<unknown[]>;
+  };
+  if (typeof runtimeApi.getContexts !== "function") return false;
+  const contexts = await runtimeApi.getContexts({
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
+    documentUrls: [chrome.runtime.getURL(OFFSCREEN_PATH)],
+  });
+  return contexts.length > 0;
+}
+
 async function ensureOffscreen(): Promise<void> {
-  if (await chrome.offscreen.hasDocument()) return;
+  if (await hasOffscreenDocument()) return;
   creatingOffscreen ??= chrome.offscreen.createDocument({
-    url: "offscreen/offscreen.html",
+    url: OFFSCREEN_PATH,
     reasons: ["USER_MEDIA", "AUDIO_PLAYBACK"] as chrome.offscreen.Reason[],
     justification: "Capture the tab stream in the offscreen document, process it locally, and play the result.",
   }).finally(() => { creatingOffscreen = undefined; });
@@ -145,7 +163,7 @@ async function consumeActionStream(tabId: number, streamId: string): Promise<voi
 }
 
 async function closeOffscreen(): Promise<void> {
-  if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument().catch(() => undefined);
+  if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument().catch(() => undefined);
 }
 
 async function stopProtectionInternal(tabId?: number, emitIdle = true, closeDocument = true): Promise<void> {
