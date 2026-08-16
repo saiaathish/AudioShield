@@ -1,5 +1,6 @@
 import type { SensoryEvent } from "../shared/events/types";
 import type { TriggerRule } from "../shared/settings/types";
+import { defaultSettings } from "../storage/settings";
 import { createSensoryGraph, type SensoryEngineName, type SensoryGraph } from "./sensory-engine";
 
 export type OffscreenStatus =
@@ -26,14 +27,8 @@ type GraphFactory = (
   emitEvent: (event: SensoryEvent) => void,
 ) => Promise<SensoryGraph>;
 
-const DEFAULT_RULES: readonly TriggerRule[] = [
-  { id: "background-noise", enabled: true, strength: 72 },
-  { id: "alarm-siren", enabled: true, strength: 82 },
-  { id: "dishes-clatter", enabled: true, strength: 56 },
-  { id: "applause", enabled: true, strength: 46 },
-  { id: "harsh-highs", enabled: true, strength: 42 },
-  { id: "sudden-loudness", enabled: true, strength: 62 },
-];
+const DEFAULT_SETTINGS = defaultSettings();
+const DEFAULT_RULES: readonly TriggerRule[] = DEFAULT_SETTINGS.triggers;
 
 export function createAudioRuntime(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>,
@@ -53,7 +48,7 @@ export function createAudioRuntime(
   let bypassed = false;
   let lifecycle: Promise<void> = Promise.resolve();
   let rules: readonly TriggerRule[] = DEFAULT_RULES;
-  let masterStrength = 65;
+  let masterStrength = DEFAULT_SETTINGS.globalStrength;
 
   const emit = (status: OffscreenStatus) => statusListener?.(status);
   const emitSensoryEvent = (event: SensoryEvent) => eventListener?.(event);
