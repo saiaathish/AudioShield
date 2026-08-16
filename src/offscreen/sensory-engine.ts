@@ -42,22 +42,11 @@ function setParam(param: AudioParam, value: number, context: AudioContext, timeC
   }
 }
 
-/**
- * Alarm protection intentionally uses a wider perceptual range than the broad
- * denoiser. 0% is exactly transparent. The upper half has progressively more
- * authority so 100% behaves like an emergency maximum instead of sounding like
- * a slightly stronger version of 70%.
- */
 export function alarmStrengthDrive(strength: number): number {
   const unit = strengthToUnit(strength);
   return 0.45 * unit + 0.55 * unit ** 1.8;
 }
 
-/**
- * Dedicated alarm attenuation. Stable alarm evidence always keeps some authority
- * once detected, while route quality still controls how aggressively we notch.
- * At 100% a strong tracked alarm receives roughly 55-64 dB of targeted cut.
- */
 export function alarmAttenuationDb(strength: number, routeWeight: number, speechLikelihood: number): number {
   const drive = alarmStrengthDrive(strength);
   if (drive <= 0) return 0;
@@ -66,24 +55,11 @@ export function alarmAttenuationDb(strength: number, routeWeight: number, speech
   return -64 * drive * evidence * speechGuard;
 }
 
-/** Higher strength broadens the adaptive notch so siren modulation cannot slip around it. */
 export function alarmNotchQ(strength: number, confidence: number): number {
   const drive = alarmStrengthDrive(strength);
   return 12.5 - drive * 7.2 + clamp(confidence) * 3.5;
 }
 
-/**
- * Demucs-style remix control for the real-time path.
- *
- * GTCRN/RNNoise acts as a foreground/speech estimate. Mixing dry and neural is
- * algebraically equivalent to remixing two stems:
- *   foreground + keep * (original - foreground)
- * where (original - foreground) is the nuisance residual. This lets alarm,
- * glass and clatter routes directly turn down the nuisance stem instead of only
- * applying EQ/compression after the fact.
- *
- * 0% => exact original branch. 100% + route=1 => neural foreground only.
- */
 export function stemRouteMix(strength: number, route: number, authority = 1): number {
   const raw = perceptualDrive(strength) * routeDrive(route);
   if (raw <= 0) return 0;
@@ -91,12 +67,27 @@ export function stemRouteMix(strength: number, route: number, authority = 1): nu
   return clamp(1 - (1 - raw) ** Math.max(0.25, authority));
 }
 
-/** Alarm keeps a wider low-to-high range while still reaching a true maximum. */
 export function alarmStemMix(strength: number, route: number): number {
   const raw = alarmStrengthDrive(strength) * routeDrive(route);
   if (raw <= 0) return 0;
   if (raw >= 1) return 1;
   return clamp(1 - (1 - raw) ** 1.3);
+}
+
+/**
+ * Keep a small, continuously varying aligned-dry contribution when speech is
+ * present. This restores consonant attacks and low-energy syllables that a
+ * suppressor can gate without giving up the aggressive nuisance-remix range.
+ * No speech => unchanged separator mix. Full speech + full suppression leaves
+ * at most an 18% aligned-dry rescue path, which is then still protected by the
+ * targeted alarm/event DSP downstream.
+ */
+export function voicePreservingStemMix(rawMix: number, speechLikelihood: number): number {
+  const mix = clamp(rawMix);
+  const speech = clamp(speechLikelihood);
+  if (mix <= 0 || speech <= 0) return mix;
+  const rescueFraction = 0.18 * speech ** 1.15 * mix ** 1.4;
+  return clamp(mix * (1 - rescueFraction));
 }
 
 async function createNeuralNode(context: AudioContext): Promise<{ node: DestroyableAudioNode; engine: SensoryEngineName } | null> {
@@ -131,15 +122,13 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield v7: neural stem remix on the last listening-tested Chrome graph.
+ * AudioShield v8: speech-preserving neural stem remix.
  *
- * Demucs/HTDemucs proves the quality of explicit source remixing, but its browser
- * model is far too large and segment-oriented for a live extension path. V7 uses
- * the already-packaged real-time GTCRN/RNNoise foreground estimate as a two-stem
- * separator: foreground vs nuisance residual. Category routes now control that
- * residual directly, then the existing targeted filters clean up model leakage.
- *
- * The proven 2048/70ms analysis path stays unchanged. 0 remains transparent.
+ * The aggressive v7 nuisance remix stays intact. V8 adds a speech-rescue layer:
+ * a small aligned-dry floor only while speech is present, fast-attack/slow-release
+ * voice tracking, two gentle vocal-presence bands, and speech-aware dynamics.
+ * Deep alarm notches become narrower around speech so they keep killing the
+ * tracked tone without carving out a wide chunk of the voice.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -158,6 +147,8 @@ export async function createSensoryGraph(
   const neuralDryGain = context.createGain();
   const neuralWetGain = context.createGain();
   const merge = context.createGain();
+  const voiceBody = context.createBiquadFilter();
+  const voicePresence = context.createBiquadFilter();
   const presence = context.createBiquadFilter();
   const harshShelf = context.createBiquadFilter();
   const toneA = context.createBiquadFilter();
@@ -177,6 +168,16 @@ export async function createSensoryGraph(
   neuralWetGain.gain.value = 0;
   transientGain.gain.value = 1;
   analysisSink.gain.value = 0;
+
+  voiceBody.type = "peaking";
+  voiceBody.frequency.value = 1250;
+  voiceBody.Q.value = 0.68;
+  voiceBody.gain.value = 0;
+
+  voicePresence.type = "peaking";
+  voicePresence.frequency.value = 3150;
+  voicePresence.Q.value = 0.82;
+  voicePresence.gain.value = 0;
 
   presence.type = "peaking";
   presence.frequency.value = 2200;
@@ -206,8 +207,6 @@ export async function createSensoryGraph(
   limiter.attack.value = 0.0015;
   limiter.release.value = 0.06;
 
-  // Preserve the last real-Chrome cadence. Do not reintroduce the failed
-  // lookahead experiment without a listening test.
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.42;
   analyser.minDecibels = -100;
@@ -217,8 +216,6 @@ export async function createSensoryGraph(
   bypassDelay.connect(bypassGain);
   bypassGain.connect(context.destination);
 
-  // Delay-aligned dry and neural branches form the two-stem remix. A mix of 0
-  // reconstructs the original path; a mix of 1 leaves only the neural foreground.
   source.connect(neuralDryDelay);
   neuralDryDelay.connect(neuralDryGain);
   neuralDryGain.connect(merge);
@@ -228,7 +225,9 @@ export async function createSensoryGraph(
     neuralWetGain.connect(merge);
   }
 
-  merge.connect(presence);
+  merge.connect(voiceBody);
+  voiceBody.connect(voicePresence);
+  voicePresence.connect(presence);
   presence.connect(harshShelf);
   harshShelf.connect(toneA);
   toneA.connect(toneB);
@@ -249,6 +248,7 @@ export async function createSensoryGraph(
   let lastStats: FrameStats | undefined;
   let currentNeuralMix = 0;
   let currentBackgroundMix = 0;
+  let voiceEnvelope = 0;
   let envelopes: EventEnvelopes = { glass: 0, clatter: 0, applause: 0, loudness: 0 };
   let lastRoutes: SensoryRoutes = {
     background: 0,
@@ -307,13 +307,11 @@ export async function createSensoryGraph(
     const glassMix = stemRouteMix(effective("glass-shatter"), lastRoutes.glass, 1.2);
     const clatterMix = stemRouteMix(effective("dishes-clatter"), lastRoutes.clatter, 1.05);
     const applauseMix = stemRouteMix(effective("applause"), lastRoutes.applause, 0.9);
+    const rawMix = Math.max(currentBackgroundMix, alarmMix, glassMix, clatterMix, applauseMix);
 
-    // Strong foreground nuisance events are now allowed to drive the separator
-    // even when the broad Background Noise toggle is low. This is the key v7
-    // change: alarms/glass no longer depend on generic denoising to sound quiet.
-    currentNeuralMix = Math.max(currentBackgroundMix, alarmMix, glassMix, clatterMix, applauseMix);
-    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.012);
-    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.012);
+    currentNeuralMix = voicePreservingStemMix(rawMix, voiceEnvelope);
+    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.014);
+    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.014);
   };
 
   const applyDynamicProfile = (stats: FrameStats) => {
@@ -330,15 +328,25 @@ export async function createSensoryGraph(
       neuralMix: currentNeuralMix,
     });
 
-    setParam(presence.gain, profile.presenceDb, context, 0.040);
-    setParam(harshShelf.gain, profile.highShelfDb, context, 0.020);
-    setParam(transientGain.gain, profile.transientGain, context, 0.010);
-    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.016);
-    setParam(compressor.ratio, profile.compressorRatio, context, 0.016);
+    const voiceGuard = clamp(voiceEnvelope * (0.34 + currentNeuralMix * 0.66));
+    const protectedHighShelfDb = profile.highShelfDb * (1 - voiceGuard * 0.38);
+    const protectedTransientGain = Math.max(profile.transientGain, 1 - voiceGuard * 0.20);
+    const protectedCompressorThreshold = profile.compressorThresholdDb * (1 - voiceGuard * 0.45);
+    const protectedCompressorRatio = 1 + (profile.compressorRatio - 1) * (1 - voiceGuard * 0.55);
+    const protectedLimiterThreshold = profile.limiterThresholdDb * (1 - voiceGuard * 0.25);
+    const protectedLimiterRatio = 1 + (profile.limiterRatio - 1) * (1 - voiceGuard * 0.28);
+
+    setParam(voiceBody.gain, 1.15 * voiceGuard, context, 0.030);
+    setParam(voicePresence.gain, 2.15 * voiceGuard, context, 0.026);
+    setParam(presence.gain, Math.min(3.2, profile.presenceDb + 0.75 * voiceGuard), context, 0.040);
+    setParam(harshShelf.gain, protectedHighShelfDb, context, 0.020);
+    setParam(transientGain.gain, protectedTransientGain, context, 0.010);
+    setParam(compressor.threshold, protectedCompressorThreshold, context, 0.016);
+    setParam(compressor.ratio, protectedCompressorRatio, context, 0.016);
     setParam(compressor.attack, profile.compressorAttack, context, 0.012);
     setParam(compressor.release, profile.compressorRelease, context, 0.030);
-    setParam(limiter.threshold, profile.limiterThresholdDb, context, 0.018);
-    setParam(limiter.ratio, profile.limiterRatio, context, 0.018);
+    setParam(limiter.threshold, protectedLimiterThreshold, context, 0.018);
+    setParam(limiter.ratio, protectedLimiterRatio, context, 0.018);
   };
 
   const applyRules = () => {
@@ -361,6 +369,7 @@ export async function createSensoryGraph(
     previousFrequencies.set(frequencies);
     hasPreviousSpectrum = true;
     lastStats = stats;
+    voiceEnvelope = updateEnvelope(voiceEnvelope, stats.speechLikelihood, 0.88);
 
     const candidates = findToneCandidates(frequencies, context.sampleRate, analyser.fftSize, 3);
     toneTrackers = [
@@ -411,8 +420,9 @@ export async function createSensoryGraph(
         const trackerEvidence = tracker.confidence * (0.45 + persistence * 0.55);
         const routeWeight = Math.max(lastRoutes.alarm, routeDrive(trackerEvidence));
         const attenuation = alarmAttenuationDb(alarmStrength, routeWeight, stats.speechLikelihood);
+        const speechNarrowing = 1 + voiceEnvelope * 0.45;
         setParam(tone.frequency, tracker.frequencyHz, context, 0.010);
-        setParam(tone.Q, alarmNotchQ(alarmStrength, tracker.confidence), context, 0.012);
+        setParam(tone.Q, alarmNotchQ(alarmStrength, tracker.confidence) * speechNarrowing, context, 0.012);
         setParam(tone.gain, attenuation, context, 0.010);
         if (index === 0 && routeWeight >= 0.10) {
           maybeEmit("alarm-siren", routeWeight, attenuation, tracker.frequencyHz);
@@ -454,6 +464,8 @@ export async function createSensoryGraph(
         neuralDryGain,
         neuralWetGain,
         merge,
+        voiceBody,
+        voicePresence,
         presence,
         harshShelf,
         toneA,
