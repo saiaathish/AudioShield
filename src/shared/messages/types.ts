@@ -2,13 +2,15 @@ import type { SensoryEvent } from "../events/types";
 import type { AudioShieldError } from "../errors/types";
 import type { TriggerRule } from "../settings/types";
 
+export type SensoryEngineName = "gtcrn" | "rnnoise" | "native-sensory";
+
 export type EngineStatus =
   | { state: "idle" }
   | { state: "loading-models" }
   | { state: "starting"; tabId: number }
   | { state: "capturing"; tabId: number }
-  | { state: "protecting"; tabId: number; engine: "dsp-hybrid" }
-  | { state: "unavailable"; tabId: number; code: "SEPARATOR_UNAVAILABLE" }
+  | { state: "protecting"; tabId: number; engine: SensoryEngineName }
+  | { state: "unavailable"; tabId: number; code: "SENSORY_ENGINE_UNAVAILABLE"; rawMessage?: string }
   | { state: "bypassed"; tabId: number }
   | { state: "error"; code: string; stage?: string; rawName?: string; rawMessage?: string; chromeMessage?: string; tabId?: number; scheme?: string; host?: string };
 
