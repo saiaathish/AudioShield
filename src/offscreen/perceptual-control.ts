@@ -296,22 +296,6 @@ export function updateToneTracker(previous: ToneTracker, candidate?: ToneCandida
   };
 }
 
-function harmonicStackPenalty(stableTones: readonly ToneTracker[]): number {
-  if (stableTones.length < 2) return 0;
-  const sorted = [...stableTones].sort((a, b) => a.frequencyHz - b.frequencyHz);
-  const base = sorted[0]?.frequencyHz ?? 0;
-  if (base <= 0 || base > 950) return 0;
-
-  let harmonicMatches = 0;
-  for (const tone of sorted.slice(1)) {
-    const ratio = tone.frequencyHz / base;
-    const nearest = Math.round(ratio);
-    if (nearest >= 2 && nearest <= 6 && Math.abs(ratio - nearest) <= 0.065) harmonicMatches += 1;
-  }
-  if (!harmonicMatches) return 0;
-  return Math.min(0.55, 0.34 + harmonicMatches * 0.10);
-}
-
 export function computeSensoryRoutes(stats: FrameStats, toneTrackers: readonly ToneTracker[]): SensoryRoutes {
   const stableTones = toneTrackers.filter((tracker) => tracker.persistence >= 2 && tracker.confidence >= 0.12);
   const strongestTone = stableTones.reduce((best, tracker) => Math.max(
@@ -319,23 +303,17 @@ export function computeSensoryRoutes(stats: FrameStats, toneTrackers: readonly T
     tracker.confidence * clamp((tracker.persistence - 1) / 4),
   ), 0);
   const multiToneBonus = stableTones.length >= 2 ? Math.min(0.16, (stableTones.length - 1) * 0.08) : 0;
-
-  // A low fundamental plus integer-spaced persistent overtones is common in
-  // voiced speech/music. Penalize that structure instead of notching a normal
-  // harmonic stack just because it contains several strong narrow peaks.
-  const musicPenalty = harmonicStackPenalty(stableTones);
-  const structuredAudioGuard = 1 - stats.speechLikelihood * 0.48;
-  const alarm = clamp((strongestTone + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
-
+  const alarm = clamp(strongestTone + multiToneBonus);
   const glass = stats.glassConfidence;
   const clatter = clamp(stats.clatterConfidence * (1 - glass * 0.58));
   const applause = clamp(stats.applauseConfidence * (1 - glass * 0.48));
   const harsh = stats.harshConfidence;
   const loudness = stats.loudnessConfidence;
-  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness, harsh * 0.55);
+  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness);
 
-  // Foreground sensory patterns explicitly pre-empt broad denoising. This keeps
-  // the neural model from receiving credit for every sound it happens to remove.
+  // Foreground events explicitly pre-empt broad denoising. This is the core
+  // routing rule that stops a house alarm or glass break from being treated as
+  // generic background noise simply because the neural denoiser can remove it.
   const background = clamp(stats.backgroundConfidence * (1 - foregroundDominance * 0.96));
 
   return { background, alarm, glass, clatter, applause, harsh, loudness, foregroundDominance };
