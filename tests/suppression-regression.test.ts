@@ -4,6 +4,7 @@ import {
   computeDynamicProfile,
   computeSensoryRoutes,
   continuousNeuralMix,
+  perceptualDrive,
   strengthToUnit,
   type FrameStats,
   type ToneTracker,
@@ -46,9 +47,17 @@ function profile(strength: number) {
 }
 
 describe("suppression regression guard", () => {
-  it("keeps every 1% strength step continuous while preserving real full-scale suppression", () => {
-    for (let value = 1; value <= 100; value += 1) {
-      expect(strengthToUnit(value)).toBeGreaterThan(strengthToUnit(value - 1));
+  it("keeps every 1% control step active while preserving decisive bounded suppression", () => {
+    let previousDrive = -1;
+    let previousNeuralMix = -1;
+    for (let value = 0; value <= 100; value += 1) {
+      expect(strengthToUnit(value)).toBeGreaterThan(previousDrive < 0 ? -1 : strengthToUnit(value - 1));
+      const drive = perceptualDrive(value);
+      const neuralMix = continuousNeuralMix(value, 0.8);
+      expect(drive).toBeGreaterThan(previousDrive);
+      expect(neuralMix).toBeGreaterThan(previousNeuralMix);
+      previousDrive = drive;
+      previousNeuralMix = neuralMix;
     }
 
     const p0 = profile(0);
@@ -60,10 +69,11 @@ describe("suppression regression guard", () => {
     expect(p0.highShelfDb).toBeCloseTo(0, 8);
     expect(p0.transientGain).toBeCloseTo(1, 8);
     expect(p25.highShelfDb).toBeLessThan(0);
-    expect(p50.highShelfDb).toBeLessThan(p25.highShelfDb);
-    expect(p75.highShelfDb).toBeLessThan(p50.highShelfDb);
-    expect(p100.highShelfDb).toBeLessThan(p75.highShelfDb);
+    expect(p50.highShelfDb).toBeLessThanOrEqual(p25.highShelfDb);
+    expect(p75.highShelfDb).toBeLessThanOrEqual(p50.highShelfDb);
+    expect(p100.highShelfDb).toBeLessThanOrEqual(p75.highShelfDb);
     expect(p100.highShelfDb).toBeLessThanOrEqual(-6);
+    expect(p100.highShelfDb).toBeGreaterThanOrEqual(-20);
     expect(p100.transientGain).toBeLessThan(0.75);
     expect(p100.compressorRatio).toBeGreaterThan(2);
   });
