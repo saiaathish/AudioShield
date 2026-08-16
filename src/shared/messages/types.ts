@@ -18,6 +18,7 @@ export type RuntimeMessage =
   | { type: "BYPASS_SET"; enabled: boolean }
   | { type: "TRIGGER_RULES_SET"; rules: TriggerRule[] }
   | { type: "PROTECTION_RULES_UPDATE"; rules: Pick<TriggerRule, "id" | "enabled" | "strength">[]; masterStrength: number }
+  | { type: "ENGINE_STATUS_REQUEST" }
   | { type: "SENSORY_EVENT"; event: SensoryEvent }
   | { type: "ENGINE_STATUS"; status: EngineStatus }
   | { type: "ENGINE_ERROR"; error: AudioShieldError };
