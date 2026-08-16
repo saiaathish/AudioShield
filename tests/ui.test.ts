@@ -3,8 +3,15 @@ import { labels, statusCopy } from "../src/ui/main";
 import type { RuntimeMessage } from "../src/shared/messages/types";
 
 describe("popup UI contracts", () => {
-  it("names every P0 trigger for accessible controls", () => {
-    expect(Object.keys(labels)).toEqual(["alarm-siren"]);
+  it("names every sensory trigger for accessible controls", () => {
+    expect(Object.keys(labels)).toEqual([
+      "background-noise",
+      "alarm-siren",
+      "dishes-clatter",
+      "applause",
+      "harsh-highs",
+      "sudden-loudness",
+    ]);
     expect(Object.values(labels).every((item) => item.name && item.hint)).toBe(true);
   });
 
@@ -16,9 +23,10 @@ describe("popup UI contracts", () => {
     expect(messages.map((message) => message.type)).toEqual(["BYPASS_SET", "PROTECTION_START"]);
   });
 
-  it("does not present requested protection as active or measured", () => {
+  it("does not present requested protection as active or hide fallbacks", () => {
     expect(statusCopy({ state: "idle" }, true).title).toBe("Protection requested");
-    expect(statusCopy({ state: "unavailable", tabId: 7, code: "SEPARATOR_UNAVAILABLE" }, true).detail).toMatch(/unavailable/i);
-    expect(statusCopy({ state: "protecting", tabId: 7, engine: "dsp-hybrid" }, true).title).toBe("Protecting this tab");
+    expect(statusCopy({ state: "unavailable", tabId: 7, code: "SENSORY_ENGINE_UNAVAILABLE" }, true).detail).toMatch(/unavailable/i);
+    expect(statusCopy({ state: "protecting", tabId: 7, engine: "gtcrn" }, true).detail).toMatch(/GTCRN/i);
+    expect(statusCopy({ state: "protecting", tabId: 7, engine: "rnnoise" }, true).detail).toMatch(/RNNoise/i);
   });
 });
