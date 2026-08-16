@@ -1,6 +1,7 @@
 export const P0_TRIGGER_IDS = [
   "background-noise",
   "alarm-siren",
+  "glass-shatter",
   "dishes-clatter",
   "applause",
   "harsh-highs",
