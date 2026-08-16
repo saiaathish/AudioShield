@@ -1,4 +1,5 @@
 import { createAudioRuntime } from "./runtime";
+import type { TriggerRule } from "../shared/settings/types";
 
 const runtime = createAudioRuntime((constraints) => navigator.mediaDevices.getUserMedia(constraints));
 
@@ -13,16 +14,14 @@ chrome.runtime.onMessage.addListener((message: {
   type: string;
   streamId?: string;
   tabId?: number;
-  rules?: { id: string; enabled: boolean; strength: number }[];
+  rules?: TriggerRule[];
   masterStrength?: number;
+  enabled?: boolean;
 }) => {
   if (message.type === "OFFSCREEN_START" && message.streamId) void runtime.start(message.streamId, message.tabId);
   if (message.type === "OFFSCREEN_STOP") void runtime.stop();
-  if (message.type === "BYPASS_SET") void runtime.setBypass(Boolean((message as { enabled?: boolean }).enabled));
+  if (message.type === "BYPASS_SET") void runtime.setBypass(Boolean(message.enabled));
   if (message.type === "PROTECTION_RULES_UPDATE") {
-    const alarm = message.rules?.find((rule) => rule.id === "alarm-siren");
-    const triggerStrength = Math.max(0, Math.min(100, alarm?.strength ?? 78));
-    const masterStrength = Math.max(0, Math.min(100, message.masterStrength ?? 100));
-    runtime.setRules(Boolean(alarm?.enabled), triggerStrength * masterStrength / 100);
+    runtime.setRules(message.rules ?? [], Math.max(0, Math.min(100, message.masterStrength ?? 65)));
   }
 });
