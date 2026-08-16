@@ -11,6 +11,7 @@ import {
   neuralDelaySeconds,
   perceptualDrive,
   routeDrive,
+  strengthToUnit,
   updateEnvelope,
   updateToneTracker,
   type EventEnvelopes,
@@ -39,6 +40,36 @@ function setParam(param: AudioParam, value: number, context: AudioContext, timeC
   } catch {
     param.value = safe;
   }
+}
+
+/**
+ * Alarm protection intentionally uses a wider perceptual range than the broad
+ * denoiser. 0% is exactly transparent. The upper half has progressively more
+ * authority so 100% behaves like an emergency maximum instead of sounding like
+ * a slightly stronger version of 70%.
+ */
+export function alarmStrengthDrive(strength: number): number {
+  const unit = strengthToUnit(strength);
+  return 0.45 * unit + 0.55 * unit ** 1.8;
+}
+
+/**
+ * Dedicated alarm attenuation. Stable alarm evidence always keeps some authority
+ * once detected, while route quality still controls how aggressively we notch.
+ * At 100% a strong tracked alarm receives roughly 55-64 dB of targeted cut.
+ */
+export function alarmAttenuationDb(strength: number, routeWeight: number, speechLikelihood: number): number {
+  const drive = alarmStrengthDrive(strength);
+  if (drive <= 0) return 0;
+  const evidence = 0.36 + routeDrive(routeWeight) * 0.64;
+  const speechGuard = 1 - clamp(speechLikelihood) * 0.12;
+  return -64 * drive * evidence * speechGuard;
+}
+
+/** Higher strength broadens the adaptive notch so siren modulation cannot slip around it. */
+export function alarmNotchQ(strength: number, confidence: number): number {
+  const drive = alarmStrengthDrive(strength);
+  return 12.5 - drive * 7.2 + clamp(confidence) * 3.5;
 }
 
 async function createNeuralNode(context: AudioContext): Promise<{ node: DestroyableAudioNode; engine: SensoryEngineName } | null> {
@@ -73,12 +104,12 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield v5: decisive routing on the last listening-tested Chrome graph.
+ * AudioShield v6: decisive routing on the last listening-tested Chrome graph.
  *
- * Keep the proven 2048/70ms analysis path and no extra lookahead node. The fix
- * here is control authority: master/profile composition, route evidence, event
- * envelopes, and speech guards no longer multiply medium-confidence events into
- * a near-no-op. Every 0-100 input remains continuous.
+ * Keep the proven 2048/70ms analysis path and no extra lookahead node. The core
+ * graph stays stable while alarm suppression now has a true 0-100 range: zero is
+ * transparent, intermediate values are distinct, and 100 is an emergency-grade
+ * targeted cut rather than a modest notch.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -328,20 +359,18 @@ export async function createSensoryGraph(
     }
 
     const alarmStrength = effective("alarm-siren");
-    const alarmUnit = perceptualDrive(alarmStrength);
     const tones = [toneA, toneB, toneC];
     for (let index = 0; index < tones.length; index += 1) {
       const tracker = toneTrackers[index];
       const tone = tones[index];
       const stable = tracker.persistence >= 2 && tracker.confidence >= 0.08;
-      if (stable && alarmUnit > 0) {
-        const speechGuard = 1 - stats.speechLikelihood * 0.16;
+      if (stable && alarmStrength > 0) {
         const persistence = clamp((tracker.persistence - 1) / 4);
         const trackerEvidence = tracker.confidence * (0.45 + persistence * 0.55);
         const routeWeight = Math.max(lastRoutes.alarm, routeDrive(trackerEvidence));
-        const attenuation = -34 * alarmUnit * routeWeight * speechGuard;
+        const attenuation = alarmAttenuationDb(alarmStrength, routeWeight, stats.speechLikelihood);
         setParam(tone.frequency, tracker.frequencyHz, context, 0.010);
-        setParam(tone.Q, 6.5 + tracker.confidence * 7.5, context, 0.012);
+        setParam(tone.Q, alarmNotchQ(alarmStrength, tracker.confidence), context, 0.012);
         setParam(tone.gain, attenuation, context, 0.010);
         if (index === 0 && routeWeight >= 0.10) {
           maybeEmit("alarm-siren", routeWeight, attenuation, tracker.frequencyHz);
