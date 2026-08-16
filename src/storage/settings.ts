@@ -80,7 +80,7 @@ function normalizeSitePreferences(value: unknown, schema: number): AudioShieldSe
   for (const [site, preference] of Object.entries(value as Record<string, unknown>)) {
     if (!preference || typeof preference !== "object") continue;
     const raw = preference as Record<string, unknown>;
-    const next: Partial<Pick<AudioShieldSettings, "globalStrength" | "triggers">> = {};
+    const next: { globalStrength?: number; triggers?: readonly TriggerRule[] } = {};
     if (raw.globalStrength !== undefined) {
       next.globalStrength = normalizeStrength(raw.globalStrength, DEFAULT_GLOBAL_STRENGTH, schema);
     }
