@@ -59,6 +59,13 @@ type AlarmResult = {
   detected: boolean;
 };
 
+type FrequencyProjection = {
+  frequency: number;
+  power: number;
+  re: number;
+  im: number;
+};
+
 /** Deterministic tonal P0: find concentrated alarm/siren energy and subtract only
  * the estimated dominant sinusoid. It never keys off URLs, filenames or timestamps. */
 function attenuateTonalAlarm(input: Float32Array, sampleRate: number, requestedDb = -12): AlarmResult {
@@ -78,42 +85,36 @@ function attenuateTonalAlarm(input: Float32Array, sampleRate: number, requestedD
   const rmsPower = total / input.length;
   if (rmsPower < 1e-7) return identity();
 
+  const lowerHz = 500;
   const upperHz = Math.min(5000, sampleRate / 2 - 100);
-  let bestFrequency = 0;
-  let bestPower = 0;
-  let bestRe = 0;
-  let bestIm = 0;
+  if (upperHz <= lowerHz) return identity();
 
-  for (let frequency = 500; frequency <= upperHz; frequency += 100) {
-    let re = 0;
-    let im = 0;
-    const omega = 2 * Math.PI * frequency / sampleRate;
-    for (let i = 0; i < input.length; i += 1) {
-      const phase = omega * i;
-      re += input[i] * Math.cos(phase);
-      im -= input[i] * Math.sin(phase);
-    }
-    const power = 2 * (re * re + im * im) / (input.length * input.length);
-    if (power > bestPower) {
-      bestPower = power;
-      bestFrequency = frequency;
-      bestRe = re;
-      bestIm = im;
-    }
+  let best: FrequencyProjection = { frequency: 0, power: 0, re: 0, im: 0 };
+  const consider = (frequency: number) => {
+    const candidate = projectFrequency(input, sampleRate, frequency);
+    if (candidate.power > best.power) best = candidate;
+  };
+
+  // Coarse search keeps production cost bounded. The second local pass matters: a
+  // 950 Hz alarm should not disappear just because the coarse grid landed at 900/1000.
+  for (let frequency = lowerHz; frequency <= upperHz; frequency += 100) consider(frequency);
+  if (best.frequency === 0) return identity();
+  const coarseFrequency = best.frequency;
+  for (let frequency = Math.max(lowerHz, coarseFrequency - 100); frequency <= Math.min(upperHz, coarseFrequency + 100); frequency += 10) {
+    consider(frequency);
   }
 
-  if (bestFrequency === 0) return identity();
-
-  const concentration = bestPower / Math.max(rmsPower, 1e-9);
+  const concentration = best.power / Math.max(rmsPower, 1e-9);
   const confidence = Math.max(0, Math.min(1, (concentration - 0.14) / 0.45));
-  if (confidence < 0.55) return identity(confidence, bestFrequency);
+  if (confidence < 0.55) return identity(confidence, best.frequency);
 
   const requested = Math.max(0, Math.min(18, Math.abs(Number.isFinite(requestedDb) ? requestedDb : 12)));
+  if (requested === 0) return identity(confidence, best.frequency);
   const removal = Math.min(0.92, (1 - 10 ** (-requested / 20)) * confidence);
-  const omega = 2 * Math.PI * bestFrequency / sampleRate;
+  const omega = 2 * Math.PI * best.frequency / sampleRate;
   for (let i = 0; i < output.length; i += 1) {
     const angle = omega * i;
-    const tone = 2 * (bestRe * Math.cos(angle) - bestIm * Math.sin(angle)) / input.length;
+    const tone = 2 * (best.re * Math.cos(angle) - best.im * Math.sin(angle)) / input.length;
     output[i] = clamp(output[i] - removal * tone);
   }
 
@@ -121,8 +122,25 @@ function attenuateTonalAlarm(input: Float32Array, sampleRate: number, requestedD
     samples: output,
     attenuationDb: 20 * Math.log10(Math.max(1e-6, 1 - removal)),
     confidence,
-    dominantFrequencyHz: bestFrequency,
+    dominantFrequencyHz: best.frequency,
     detected: true,
+  };
+}
+
+function projectFrequency(input: Float32Array, sampleRate: number, frequency: number): FrequencyProjection {
+  let re = 0;
+  let im = 0;
+  const omega = 2 * Math.PI * frequency / sampleRate;
+  for (let i = 0; i < input.length; i += 1) {
+    const phase = omega * i;
+    re += input[i] * Math.cos(phase);
+    im -= input[i] * Math.sin(phase);
+  }
+  return {
+    frequency,
+    power: 2 * (re * re + im * im) / (input.length * input.length),
+    re,
+    im,
   };
 }
 
