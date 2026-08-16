@@ -1,9 +1,3 @@
-import {
-  GtcrnWorkletNode,
-  RnnoiseWorkletNode,
-  loadGtcrn,
-  loadRnnoise,
-} from "@sapphi-red/web-noise-suppressor";
 import type { SensoryEvent } from "../shared/events/types";
 import type { TriggerId, TriggerRule } from "../shared/settings/types";
 
@@ -35,11 +29,15 @@ function setParam(param: AudioParam, value: number, context: AudioContext, timeC
 async function createNeuralNode(context: AudioContext): Promise<{ node: DestroyableAudioNode; engine: SensoryEngineName } | null> {
   const url = (path: string) => chrome.runtime.getURL(path);
 
+  // Keep the browser-only AudioWorklet classes out of Node/Vitest module
+  // evaluation. They are loaded only inside the real offscreen browser context.
+  const suppressor = await import("@sapphi-red/web-noise-suppressor");
+
   try {
-    const wasmBinary = await loadGtcrn({ url: url("vendor/gtcrn.wasm") });
+    const wasmBinary = await suppressor.loadGtcrn({ url: url("vendor/gtcrn.wasm") });
     await context.audioWorklet.addModule(url("vendor/gtcrn-worklet.js"));
     return {
-      node: new GtcrnWorkletNode(context, { wasmBinary, maxChannels: 2 }),
+      node: new suppressor.GtcrnWorkletNode(context, { wasmBinary, maxChannels: 2 }),
       engine: "gtcrn",
     };
   } catch (gtcrnError) {
@@ -47,13 +45,13 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
   }
 
   try {
-    const wasmBinary = await loadRnnoise({
+    const wasmBinary = await suppressor.loadRnnoise({
       url: url("vendor/rnnoise.wasm"),
       simdUrl: url("vendor/rnnoise_simd.wasm"),
     });
     await context.audioWorklet.addModule(url("vendor/rnnoise-worklet.js"));
     return {
-      node: new RnnoiseWorkletNode(context, { wasmBinary, maxChannels: 2 }),
+      node: new suppressor.RnnoiseWorkletNode(context, { wasmBinary, maxChannels: 2 }),
       engine: "rnnoise",
     };
   } catch (rnnoiseError) {
@@ -65,7 +63,7 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 /**
  * AudioShield's release graph deliberately avoids ScriptProcessorNode.
  *
- * The speech-preserving denoiser is provided by the MIT-licensed
+ * The speech-first denoiser is provided by the MIT-licensed
  * @sapphi-red/web-noise-suppressor AudioWorklet package (GTCRN first,
  * RNNoise fallback). Perceptual sensory controls use browser-native Web Audio
  * nodes so heavy JS never runs in the realtime rendering callback.
@@ -122,7 +120,7 @@ export async function createSensoryGraph(
   source.connect(dryGain);
   dryGain.connect(context.destination);
 
-  // Speech-preserving neural layer can be cross-switched without reconnecting.
+  // Speech-first neural layer can be cross-switched without reconnecting.
   source.connect(neuralDryGain);
   neuralDryGain.connect(merge);
   if (neural) {
