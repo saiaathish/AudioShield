@@ -11,11 +11,21 @@ export interface UiRuntime {
 }
 
 export const labels: Partial<Record<TriggerId, { name: string; icon: string; hint: string }>> = {
-  "alarm-siren": { name: "Alarms & sirens", icon: "◌", hint: "Urgent, piercing tonal sounds" },
+  "background-noise": { name: "Background noise", icon: "≈", hint: "Neural voice-first denoising for steady environmental noise" },
+  "alarm-siren": { name: "Alarms & high tones", icon: "◌", hint: "Adaptive narrow-band suppression for piercing tonal peaks" },
+  "dishes-clatter": { name: "Clatter & sharp impacts", icon: "✦", hint: "Softens bright transients such as dishes and hard clicks" },
+  applause: { name: "Crowd & applause", icon: "✺", hint: "Tames dense bursts without muting the whole tab" },
+  "harsh-highs": { name: "Harsh highs & hiss", icon: "⌁", hint: "Reduces abrasive upper-frequency energy" },
+  "sudden-loudness": { name: "Sudden loudness", icon: "↧", hint: "Fast local compression catches startling peaks" },
 };
 
 const initialRules: TriggerRule[] = [
-  { id: "alarm-siren", enabled: true, strength: 78 },
+  { id: "background-noise", enabled: true, strength: 72 },
+  { id: "alarm-siren", enabled: true, strength: 82 },
+  { id: "dishes-clatter", enabled: true, strength: 56 },
+  { id: "applause", enabled: true, strength: 46 },
+  { id: "harsh-highs", enabled: true, strength: 42 },
+  { id: "sudden-loudness", enabled: true, strength: 62 },
 ];
 
 const chromeRuntime: UiRuntime = {
@@ -29,14 +39,20 @@ const chromeRuntime: UiRuntime = {
   activeTabId: async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id ?? null,
 };
 
+function engineName(status: Extract<EngineStatus, { state: "protecting" }>): string {
+  if (status.engine === "gtcrn") return "GTCRN neural + adaptive sensory DSP";
+  if (status.engine === "rnnoise") return "RNNoise neural + adaptive sensory DSP";
+  return "Adaptive sensory DSP";
+}
+
 export function statusCopy(status: EngineStatus, protectedTab: boolean) {
   if (status.state === "error") return { title: "Needs attention", detail: `${status.code}${status.stage ? ` — Stage: ${status.stage}` : ""}${status.rawMessage ? ` — Chrome: ${status.rawMessage}` : status.chromeMessage ? ` — Chrome: ${status.chromeMessage}` : ""}` };
-  if (status.state === "unavailable") return { title: "Protection unavailable", detail: "The local DSP processor is unavailable; audio remains unchanged" };
-  if (status.state === "protecting") return { title: "Protecting this tab", detail: "Local tonal alarm protection is active" };
-  if (status.state === "capturing") return { title: "Starting protection", detail: "Tab audio captured; starting the local DSP" };
-  if (status.state === "loading-models" || status.state === "starting") return { title: "Starting protection", detail: "Capturing this tab and activating local DSP" };
+  if (status.state === "unavailable") return { title: "Protection fallback", detail: status.rawMessage ? `Enhanced processing unavailable — ${status.rawMessage}` : "Enhanced processing unavailable; direct local playback is preserved" };
+  if (status.state === "protecting") return { title: "Protecting this tab", detail: `${engineName(status)} is active locally` };
+  if (status.state === "capturing") return { title: "Starting protection", detail: "Tab audio captured; loading the local sensory engine" };
+  if (status.state === "loading-models" || status.state === "starting") return { title: "Starting protection", detail: "Activating local AudioWorklet processing" };
   if (status.state === "bypassed") return { title: "Bypass on", detail: "Protection paused for this tab" };
-  if (protectedTab) return { title: "Protection requested", detail: "Waiting for the local DSP engine to confirm availability" };
+  if (protectedTab) return { title: "Protection requested", detail: "Waiting for the local sensory engine" };
   return { title: "Protection off", detail: "Click the AudioShield toolbar icon on a tab with audio to start" };
 }
 
@@ -46,13 +62,13 @@ function Meter({ value, label }: { value: number; label: string }) {
 
 function EventRow({ event }: { event: SensoryEvent }) {
   const label = labels[event.triggerId];
-  const attenuation = typeof event.attenuationDb === "number" ? `${event.attenuationDb.toFixed(1)} dB` : "—";
-  const frequency = typeof event.dominantFrequencyHz === "number" ? `${Math.round(event.dominantFrequencyHz)} Hz` : "tonal event";
+  const attenuation = typeof event.attenuationDb === "number" ? `${event.attenuationDb.toFixed(1)} dB` : "active";
+  const detail = typeof event.dominantFrequencyHz === "number" ? `${Math.round(event.dominantFrequencyHz)} Hz` : "sensory event";
   return <li className="event-row">
     <span className="event-dot" aria-hidden="true" />
-    <span className="event-main"><strong>{label?.name ?? event.triggerId}</strong><small>{new Date(event.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · {frequency}</small></span>
+    <span className="event-main"><strong>{label?.name ?? event.triggerId}</strong><small>{new Date(event.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · {detail}</small></span>
     <span className="event-value"><b>{Math.round(event.confidence * 100)}%</b><small>confidence</small></span>
-    <span className="event-value"><b>{attenuation}</b><small>attenuation</small></span>
+    <span className="event-value"><b>{attenuation}</b><small>reduction</small></span>
   </li>;
 }
 
@@ -71,7 +87,7 @@ export function App({ runtime = chromeRuntime }: { runtime?: UiRuntime }) {
       if (message.type === "SENSORY_EVENT") setEvents((current) => [message.event, ...current].slice(0, 8));
       if (message.type === "ENGINE_STATUS") {
         setStatus(message.status);
-        setProtectedTab(["starting", "capturing", "protecting", "bypassed"].includes(message.status.state));
+        setProtectedTab(["starting", "capturing", "protecting", "bypassed", "unavailable"].includes(message.status.state));
         setBypass(message.status.state === "bypassed");
         if ("tabId" in message.status && typeof message.status.tabId === "number" && message.status.tabId >= 0) setActiveTabId(message.status.tabId);
         setError(null);
@@ -79,6 +95,7 @@ export function App({ runtime = chromeRuntime }: { runtime?: UiRuntime }) {
       if (message.type === "ENGINE_ERROR") setError(message.error.message);
     });
     runtime.send({ type: "ENGINE_STATUS_REQUEST" });
+    runtime.send({ type: "PROTECTION_RULES_UPDATE", rules: initialRules, masterStrength: 65 });
     return unsubscribe;
   }, [runtime]);
 
@@ -106,14 +123,14 @@ export function App({ runtime = chromeRuntime }: { runtime?: UiRuntime }) {
   return <main className="shell">
     <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true">AS</span><span>AudioShield</span></div><span className={`mode mode-${themeLabel.toLowerCase()}`}><i />{themeLabel}</span></header>
     <section className="hero" aria-labelledby="page-title">
-      <div><p className="eyebrow">SENSORY PROTECTION</p><h1 id="page-title">Make sound<br /><em>work for you.</em></h1><p className="intro">Soften supported tonal alarms without muting the whole tab.</p></div>
-      <button className={`protect-button ${protectedTab ? "is-on" : ""}`} aria-pressed={protectedTab} onClick={toggleProtection}><span className="button-glyph" aria-hidden="true">{protectedTab ? "✓" : "◒"}</span><span>{protectedTab ? "Protection on" : "Start protection"}</span><small>{protectedTab ? `${activeCount} trigger active` : "Use on the current audio tab"}</small></button>
+      <div><p className="eyebrow">SENSORY PROTECTION</p><h1 id="page-title">Make sound<br /><em>work for you.</em></h1><p className="intro">Soften background noise, piercing tones, clatter, harsh highs, and sudden loudness without just turning the whole tab down.</p></div>
+      <button className={`protect-button ${protectedTab ? "is-on" : ""}`} aria-pressed={protectedTab} onClick={toggleProtection}><span className="button-glyph" aria-hidden="true">{protectedTab ? "✓" : "◒"}</span><span>{protectedTab ? "Protection on" : "Start protection"}</span><small>{protectedTab ? `${activeCount} sensory filters active` : "Use on the current audio tab"}</small></button>
     </section>
     <section className={`status-banner ${status.state === "error" || error ? "is-error" : ""}`} aria-live="polite"><span className="status-orb" aria-hidden="true" /><div><strong>{error ? "Protection unavailable" : copy.title}</strong><p>{error ?? copy.detail}</p></div>{(error || status.state === "error") && <button className="text-button" onClick={() => { setError(null); setStatus({ state: "idle" }); }}>Dismiss</button>}</section>
-    <section className="section" aria-labelledby="triggers-title"><div className="section-heading"><div><p className="eyebrow">01 / SELECTIVE FILTER</p><h2 id="triggers-title">What should we soften?</h2></div><span className="count">{activeCount} of {rules.length} on</span></div><div className="trigger-list">{rules.map((rule) => <article className={`trigger ${rule.enabled ? "active" : ""}`} key={rule.id}><button className="trigger-toggle" role="switch" aria-checked={rule.enabled} onClick={() => toggleRule(rule.id)}><span className="trigger-icon" aria-hidden="true">{labels[rule.id]?.icon ?? "◌"}</span><span className="trigger-copy"><strong>{labels[rule.id]?.name ?? rule.id}</strong><small>{labels[rule.id]?.hint ?? "Supported tonal protection"}</small></span><span className="switch" aria-hidden="true"><i /></span></button>{rule.enabled && <label className="range-label">attenuation <input type="range" min="0" max="100" value={rule.strength} onChange={(event) => updateStrength(rule.id, Number(event.target.value))} aria-label={`${labels[rule.id]?.name ?? rule.id} attenuation`} /><output>{rule.strength}%</output></label>}</article>)}</div></section>
-    <section className="section controls" aria-labelledby="controls-title"><div className="section-heading"><div><p className="eyebrow">02 / CONTROL</p><h2 id="controls-title">Protection strength</h2></div><output>{strength}%</output></div><input className="master-range" type="range" min="0" max="100" value={strength} onChange={(event) => updateMasterStrength(Number(event.target.value))} aria-label="Global protection strength" /><div className="control-notes"><span>Gentle</span><span>Balanced</span><span>Firm</span></div><div className="preserve"><span className="check" aria-hidden="true">✓</span><div><strong>Tonal alarm protection</strong><small>Deterministic local DSP. No model download or audio upload.</small></div></div></section>
-    <section className="section xray" aria-labelledby="xray-title"><div className="section-heading"><div><p className="eyebrow">03 / SENSORY X-RAY</p><h2 id="xray-title">Detection timeline</h2></div><span className="live-label"><i /> {status.state === "protecting" ? "live" : "unavailable"}</span></div>{events.length ? <ol className="event-list" aria-label="Recent sensory events">{events.map((event, index) => <EventRow event={event} key={`${event.timestamp}-${index}`} />)}</ol> : <div className="empty-state"><span className="empty-wave" aria-hidden="true">∿</span><strong>{status.state === "protecting" ? "Listening for tonal alarms" : "Detection unavailable"}</strong><p>{status.state === "protecting" ? "Real detector events appear here when AudioShield applies attenuation." : "Start protection on a tab with audio to activate the detector."}</p></div>}<div className="before-after"><div><span>detected</span><Meter value={events[0] ? Math.round(events[0].confidence * 100) : 0} label="Detected signal confidence" /></div><div><span>attenuation</span><small>{typeof events[0]?.attenuationDb === "number" ? `${events[0].attenuationDb.toFixed(1)} dB` : "Not measured yet"}</small></div></div></section>
-    <footer className="footer"><span className="privacy"><span className="lock" aria-hidden="true">▣</span><span><strong>Private by design</strong><small>Tab audio is processed locally and is not uploaded.</small></span></span><button className="bypass" aria-pressed={bypass} onClick={() => { const next = !bypass; setBypass(next); runtime.send({ type: "BYPASS_SET", enabled: next }); }}>{bypass ? "Turn protection back on" : "Bypass protection"}</button></footer>
+    <section className="section" aria-labelledby="triggers-title"><div className="section-heading"><div><p className="eyebrow">01 / SENSORY FILTERS</p><h2 id="triggers-title">What should we soften?</h2></div><span className="count">{activeCount} of {rules.length} on</span></div><div className="trigger-list">{rules.map((rule) => <article className={`trigger ${rule.enabled ? "active" : ""}`} key={rule.id}><button className="trigger-toggle" role="switch" aria-checked={rule.enabled} onClick={() => toggleRule(rule.id)}><span className="trigger-icon" aria-hidden="true">{labels[rule.id]?.icon ?? "◌"}</span><span className="trigger-copy"><strong>{labels[rule.id]?.name ?? rule.id}</strong><small>{labels[rule.id]?.hint ?? "Local sensory protection"}</small></span><span className="switch" aria-hidden="true"><i /></span></button>{rule.enabled && <label className="range-label">strength <input type="range" min="0" max="100" value={rule.strength} onChange={(event) => updateStrength(rule.id, Number(event.target.value))} aria-label={`${labels[rule.id]?.name ?? rule.id} strength`} /><output>{rule.strength}%</output></label>}</article>)}</div></section>
+    <section className="section controls" aria-labelledby="controls-title"><div className="section-heading"><div><p className="eyebrow">02 / CONTROL</p><h2 id="controls-title">Protection strength</h2></div><output>{strength}%</output></div><input className="master-range" type="range" min="0" max="100" value={strength} onChange={(event) => updateMasterStrength(Number(event.target.value))} aria-label="Global protection strength" /><div className="control-notes"><span>Gentle</span><span>Balanced</span><span>Firm</span></div><div className="preserve"><span className="check" aria-hidden="true">✓</span><div><strong>Speech-first local processing</strong><small>GTCRN AudioWorklet with RNNoise fallback plus native adaptive filters. No tab audio is uploaded.</small></div></div></section>
+    <section className="section xray" aria-labelledby="xray-title"><div className="section-heading"><div><p className="eyebrow">03 / SENSORY X-RAY</p><h2 id="xray-title">What AudioShield is catching</h2></div><span className="live-label"><i /> {status.state === "protecting" ? "live" : "standby"}</span></div>{events.length ? <ol className="event-list" aria-label="Recent sensory events">{events.map((event, index) => <EventRow event={event} key={`${event.timestamp}-${index}`} />)}</ol> : <div className="empty-state"><span className="empty-wave" aria-hidden="true">∿</span><strong>{status.state === "protecting" ? "Protection is live" : "Start AudioShield on a tab"}</strong><p>{status.state === "protecting" ? "Detected tonal peaks, sharp impacts, and loudness reductions appear here." : "Your local sensory events will show up here once processing starts."}</p></div>}<div className="before-after"><div><span>detected</span><Meter value={events[0] ? Math.round(events[0].confidence * 100) : 0} label="Detected signal confidence" /></div><div><span>reduction</span><small>{typeof events[0]?.attenuationDb === "number" ? `${events[0].attenuationDb.toFixed(1)} dB` : "Waiting for event"}</small></div></div></section>
+    <footer className="footer"><span className="privacy"><span className="lock" aria-hidden="true">▣</span><span><strong>Private by design</strong><small>All tab audio processing stays inside the extension.</small></span></span><button className="bypass" aria-pressed={bypass} onClick={() => { const next = !bypass; setBypass(next); runtime.send({ type: "BYPASS_SET", enabled: next }); }}>{bypass ? "Turn protection back on" : "Bypass protection"}</button></footer>
   </main>;
 }
 
