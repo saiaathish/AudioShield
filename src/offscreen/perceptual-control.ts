@@ -64,8 +64,28 @@ export interface DynamicProfile {
   presenceDb: number;
 }
 
-/** Exact linear 0-100 control. There are intentionally no knees or dead zones. */
+/** Exact linear 0-100 representation. Every integer percentage is distinct. */
 export const strengthToUnit = (strength: number): number => clamp(strength, 0, 100) / 100;
+
+/**
+ * Perceptual control curve for audible processing. It is continuous and strictly
+ * increasing from 0..100, but gives mid-range settings enough acoustic authority
+ * to be clearly audible instead of spending most of the slider in a near-no-op.
+ */
+export const perceptualDrive = (strength: number): number => {
+  const unit = strengthToUnit(strength);
+  return Math.sin(unit * Math.PI / 2);
+};
+
+/**
+ * Route scores are evidence, not probabilities. This monotonic curve keeps weak
+ * evidence weak while making medium/high evidence decisive enough to control the
+ * graph. 0 stays 0 and 1 stays 1.
+ */
+export const routeDrive = (route: number): number => {
+  const unit = clamp(route);
+  return 1 - (1 - unit) ** 2;
+};
 
 /**
  * Both packaged suppressors buffer audio before returning enhanced samples.
@@ -81,7 +101,7 @@ export function neuralDelaySeconds(engine: "gtcrn" | "rnnoise" | "native-sensory
 }
 
 export const continuousNeuralMix = (backgroundStrength: number, backgroundRoute: number): number =>
-  strengthToUnit(backgroundStrength) * clamp(backgroundRoute);
+  perceptualDrive(backgroundStrength) * routeDrive(backgroundRoute);
 
 export function computeFrameStats(
   frequencies: Float32Array,
@@ -320,23 +340,24 @@ export function computeSensoryRoutes(stats: FrameStats, toneTrackers: readonly T
   ), 0);
   const multiToneBonus = stableTones.length >= 2 ? Math.min(0.16, (stableTones.length - 1) * 0.08) : 0;
 
-  // A low fundamental plus integer-spaced persistent overtones is common in
-  // voiced speech/music. Penalize that structure instead of notching a normal
-  // harmonic stack just because it contains several strong narrow peaks.
   const musicPenalty = harmonicStackPenalty(stableTones);
-  const structuredAudioGuard = 1 - stats.speechLikelihood * 0.48;
-  const alarm = clamp((strongestTone + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
+  const structuredAudioGuard = 1 - stats.speechLikelihood * 0.42;
+  const alarmRaw = clamp((strongestTone + multiToneBonus) * structuredAudioGuard * (1 - musicPenalty));
+  const alarm = routeDrive(alarmRaw);
 
-  const glass = stats.glassConfidence;
-  const clatter = clamp(stats.clatterConfidence * (1 - glass * 0.58));
-  const applause = clamp(stats.applauseConfidence * (1 - glass * 0.48));
-  const harsh = stats.harshConfidence;
-  const loudness = stats.loudnessConfidence;
-  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness, harsh * 0.55);
+  const glass = routeDrive(stats.glassConfidence);
+  const clatter = routeDrive(stats.clatterConfidence * (1 - glass * 0.62));
+  const applause = routeDrive(stats.applauseConfidence * (1 - glass * 0.52));
+  const harsh = routeDrive(stats.harshConfidence);
+  const loudness = routeDrive(stats.loudnessConfidence);
+  const foregroundDominance = Math.max(alarm, glass, clatter, applause, loudness, harsh * 0.58);
 
-  // Foreground sensory patterns explicitly pre-empt broad denoising. This keeps
-  // the neural model from receiving credit for every sound it happens to remove.
-  const background = clamp(stats.backgroundConfidence * (1 - foregroundDominance * 0.96));
+  // When a foreground route becomes convincing, broad denoising should back off
+  // aggressively instead of continuing to own most of the audible change. This
+  // remains continuous: no threshold or binary switch is introduced.
+  const backgroundBase = routeDrive(stats.backgroundConfidence);
+  const foregroundRelease = (1 - foregroundDominance) ** 2.2;
+  const background = clamp(backgroundBase * foregroundRelease);
 
   return { background, alarm, glass, clatter, applause, harsh, loudness, foregroundDominance };
 }
@@ -359,34 +380,34 @@ export function computeDynamicProfile(input: {
   routes: SensoryRoutes;
   neuralMix: number;
 }): DynamicProfile {
-  const harsh = strengthToUnit(input.harshStrength);
-  const glass = strengthToUnit(input.glassStrength);
-  const clatter = strengthToUnit(input.clatterStrength);
-  const applause = strengthToUnit(input.applauseStrength);
-  const loudness = strengthToUnit(input.loudnessStrength);
-  const background = strengthToUnit(input.backgroundStrength);
-  const speechGuard = 1 - input.stats.speechLikelihood * 0.48;
+  const harsh = perceptualDrive(input.harshStrength);
+  const glass = perceptualDrive(input.glassStrength);
+  const clatter = perceptualDrive(input.clatterStrength);
+  const applause = perceptualDrive(input.applauseStrength);
+  const loudness = perceptualDrive(input.loudnessStrength);
+  const background = perceptualDrive(input.backgroundStrength);
+  const speechGuard = 1 - input.stats.speechLikelihood * 0.30;
 
   const dynamicHighCut = (
-    input.envelopes.glass * glass * 8.8 +
-    input.envelopes.clatter * clatter * 6.0 +
-    input.envelopes.applause * applause * 4.0
+    input.envelopes.glass * glass * 15.5 +
+    input.envelopes.clatter * clatter * 9.5 +
+    input.envelopes.applause * applause * 5.8
   ) * speechGuard;
-  const steadyHarshCut = harsh * input.routes.harsh * 7.8;
-  const highShelfDb = -Math.min(14, steadyHarshCut + dynamicHighCut);
+  const steadyHarshCut = harsh * input.routes.harsh * 10.5;
+  const highShelfDb = -Math.min(19, steadyHarshCut + dynamicHighCut);
 
-  const transientDb = -Math.min(7.5, (
-    input.envelopes.glass * glass * 5.8 +
-    input.envelopes.clatter * clatter * 3.4 +
-    input.envelopes.applause * applause * 1.9 +
-    input.envelopes.loudness * loudness * 4.8
+  const transientDb = -Math.min(12.5, (
+    input.envelopes.glass * glass * 10.5 +
+    input.envelopes.clatter * clatter * 6.5 +
+    input.envelopes.applause * applause * 3.1 +
+    input.envelopes.loudness * loudness * 8.2
   ) * speechGuard);
 
   const impact = clamp(
-    input.envelopes.glass * glass * 0.95 +
-    input.envelopes.clatter * clatter * 0.68 +
-    input.envelopes.applause * applause * 0.42 +
-    input.envelopes.loudness * loudness,
+    input.envelopes.glass * glass * 1.08 +
+    input.envelopes.clatter * clatter * 0.78 +
+    input.envelopes.applause * applause * 0.48 +
+    input.envelopes.loudness * loudness * 1.08,
   );
 
   const safetyAmount = Math.max(harsh, glass, clatter, applause, loudness, background);
@@ -394,14 +415,14 @@ export function computeDynamicProfile(input: {
   return {
     highShelfDb,
     transientGain: dbToGain(transientDb),
-    // At zero strength these are exactly transparent (threshold 0, ratio 1).
-    compressorThresholdDb: -18 * impact,
-    compressorRatio: 1 + impact * 4.1,
-    compressorAttack: 0.010 - impact * 0.0075,
-    compressorRelease: 0.095 + impact * 0.13,
-    limiterThresholdDb: -1.7 * safetyAmount,
-    limiterRatio: 1 + safetyAmount * 15,
-    // Presence restoration scales continuously with the actual neural mix.
-    presenceDb: clamp(input.neuralMix * (0.42 + background * 1.55) - harsh * 0.42, 0, 2.0),
+    compressorThresholdDb: -24 * impact,
+    compressorRatio: 1 + impact * 5.5,
+    compressorAttack: 0.008 - impact * 0.0065,
+    compressorRelease: 0.09 + impact * 0.16,
+    limiterThresholdDb: -3.2 * safetyAmount,
+    limiterRatio: 1 + safetyAmount * 19,
+    // Restore a little presence after neural suppression, but do not undo harsh
+    // high-frequency protection during a foreground sensory event.
+    presenceDb: clamp(input.neuralMix * (0.58 + background * 1.9) - harsh * 0.50, 0, 2.4),
   };
 }
