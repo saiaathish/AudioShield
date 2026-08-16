@@ -26,6 +26,15 @@ type GraphFactory = (
   emitEvent: (event: SensoryEvent) => void,
 ) => Promise<SensoryGraph>;
 
+const DEFAULT_RULES: readonly TriggerRule[] = [
+  { id: "background-noise", enabled: true, strength: 72 },
+  { id: "alarm-siren", enabled: true, strength: 82 },
+  { id: "dishes-clatter", enabled: true, strength: 56 },
+  { id: "applause", enabled: true, strength: 46 },
+  { id: "harsh-highs", enabled: true, strength: 42 },
+  { id: "sudden-loudness", enabled: true, strength: 62 },
+];
+
 export function createAudioRuntime(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>,
   createContext: () => AudioContext = () => new AudioContext({ sampleRate: 48_000, latencyHint: "interactive" }),
@@ -43,7 +52,7 @@ export function createAudioRuntime(
   let stopping = false;
   let bypassed = false;
   let lifecycle: Promise<void> = Promise.resolve();
-  let rules: readonly TriggerRule[] = [];
+  let rules: readonly TriggerRule[] = DEFAULT_RULES;
   let masterStrength = 65;
 
   const emit = (status: OffscreenStatus) => statusListener?.(status);
@@ -163,7 +172,7 @@ export function createAudioRuntime(
       });
     },
     setRules(nextRules, nextMasterStrength) {
-      rules = nextRules;
+      rules = nextRules.length ? nextRules : DEFAULT_RULES;
       masterStrength = Number.isFinite(nextMasterStrength) ? Math.max(0, Math.min(100, nextMasterStrength)) : masterStrength;
       graph?.setRules(rules, masterStrength);
     },
