@@ -12,6 +12,11 @@ import {
   type FrameStats,
   type ToneTracker,
 } from "../src/offscreen/perceptual-control";
+import {
+  ANALYSIS_FFT_SIZE,
+  ANALYSIS_INTERVAL_MS,
+  EVENT_LOOKAHEAD_SECONDS,
+} from "../src/offscreen/sensory-engine";
 
 function flatSpectrum(db: number, bins = 1024): Float32Array {
   return new Float32Array(bins).fill(db);
@@ -48,7 +53,7 @@ function stats(overrides: Partial<FrameStats> = {}): FrameStats {
   };
 }
 
-describe("perceptual control v3", () => {
+describe("perceptual control v4", () => {
   it("has a mathematically continuous 0-100 strength curve with no dead zones", () => {
     expect(strengthToUnit(0)).toBe(0);
     expect(strengthToUnit(100)).toBe(1);
@@ -63,6 +68,14 @@ describe("perceptual control v3", () => {
     expect(neuralDelaySeconds("rnnoise", 48_000)).toBeCloseTo(640 / 48_000, 10);
     expect(neuralDelaySeconds("gtcrn", 16_000)).toBeCloseTo(128 / 16_000, 10);
     expect(neuralDelaySeconds("native-sensory", 48_000)).toBe(0);
+  });
+
+  it("keeps the transient analysis window and cadence inside the lookahead budget", () => {
+    const analysisWindowMs = ANALYSIS_FFT_SIZE / 48_000 * 1000;
+    expect(ANALYSIS_FFT_SIZE).toBe(1024);
+    expect(analysisWindowMs).toBeLessThan(22);
+    expect(ANALYSIS_INTERVAL_MS).toBeLessThanOrEqual(24);
+    expect(EVENT_LOOKAHEAD_SECONDS * 1000).toBeGreaterThanOrEqual(24);
   });
 
   it("keeps every processing stage transparent at 0%", () => {
@@ -101,7 +114,18 @@ describe("perceptual control v3", () => {
     expect(routes.alarm).toBeGreaterThan(routes.background);
   });
 
-  it("routes glass shatter ahead of background and ordinary clatter", () => {
+  it("penalizes a low musical harmonic stack instead of treating it like an alarm", () => {
+    const frame = stats({ speechLikelihood: 0.82, backgroundConfidence: 0.18 });
+    const trackers: ToneTracker[] = [
+      { frequencyHz: 700, confidence: 0.94, persistence: 6 },
+      { frequencyHz: 1400, confidence: 0.90, persistence: 6 },
+      { frequencyHz: 2100, confidence: 0.84, persistence: 5 },
+    ];
+    const routes = computeSensoryRoutes(frame, trackers);
+    expect(routes.alarm).toBeLessThan(0.4);
+  });
+
+  it("routes glass-like brittle energy ahead of background and ordinary clatter", () => {
     const frame = stats({
       backgroundConfidence: 0.88,
       glassConfidence: 0.95,
@@ -113,6 +137,18 @@ describe("perceptual control v3", () => {
     const routes = computeSensoryRoutes(frame, []);
     expect(routes.glass).toBeGreaterThan(routes.clatter);
     expect(routes.background).toBeLessThan(0.15);
+  });
+
+  it("lets harsh foreground energy suppress broad background ownership", () => {
+    const frame = stats({
+      backgroundConfidence: 0.9,
+      harshConfidence: 0.95,
+      highRatio: 0.88,
+      spectralCentroidHz: 6800,
+    });
+    const routes = computeSensoryRoutes(frame, []);
+    expect(routes.harsh).toBeGreaterThan(0.9);
+    expect(routes.background).toBeLessThan(0.5);
   });
 
   it("detects a synthetic brittle high-frequency transient as glass-like", () => {
