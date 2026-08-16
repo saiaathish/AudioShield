@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "fixture": {
+    "id": "semantic-hearing-speech-dishes-v1",
+    "seed": 7331,
+    "sampleRateHz": 44100,
+    "durationSeconds": 1,
+    "channels": 2,
+    "speechDescription": "deterministic voiced harmonic stem with syllabic envelope",
+    "dishesDescription": "deterministic high-frequency transient clatter stem",
+    "mixture": "speech + dishes, channel-aligned sum"
+  },
+  "files": {
+    "speech": {
+      "path": "speech.wav",
+      "bytes": 176444,
+      "sha256": "7434d3c85e5865970a6a689ba88d7070e3de9a9f6ac7541775305ee6a23f535d"
+    },
+    "dishes": {
+      "path": "dishes.wav",
+      "bytes": 176444,
+      "sha256": "d86d3b11dbbe0425048265ee6cf81864916e9278beedfdd864686e76c8e3b68d"
+    },
+    "mixture": {
+      "path": "mixture.wav",
+      "bytes": 176444,
+      "sha256": "57f486b04cf13d7dbb3780c8906ca57af5e53c738d76b9b3b48a95bb1326627b"
+    }
+  }
+}

@@ -1,1 +1,1 @@
-{"model":"mock-inference","runtime":"browser-local adapter","license":"Apache-2.0","source":"test fixture; no model weights bundled","attribution":"AudioShield detector adapter"}
+{"model":"YAMNet","status":"BLOCKED_UNKNOWN","codeLicense":"Apache-2.0","weightLicense":"UNKNOWN","weightsBundled":false,"sourceCommit":"dd3514a41bc2fbafb2d15b58ba36ef20933866d4","adapter":"fail-closed local adapter; no network or synthetic fallback"}

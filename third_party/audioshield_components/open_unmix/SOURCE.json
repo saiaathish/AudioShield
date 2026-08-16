@@ -1,0 +1,185 @@
+{
+  "repository": "https://github.com/sigsep/open-unmix-pytorch",
+  "owner": "sigsep",
+  "name": "open-unmix-pytorch",
+  "default_branch": "master",
+  "clone_timestamp_utc": "2026-08-16T14:58:56Z",
+  "commit": "fb672c9584997c2b05e148eeaa65b4c23ed4693b",
+  "license": "MIT",
+  "license_spdx_identifier": "MIT",
+  "license_verified": true,
+  "license_file": "LICENSE",
+  "license_status": "VERIFIED",
+  "attribution_requirements": "Retain the MIT copyright and permission notice when redistributing copied substantial portions.",
+  "repo_status": "REFERENCE",
+  "classification": "REFERENCE_ONLY",
+  "model_weights": [
+    {
+      "name": "UMX-HQ bass/drums/other/vocals checkpoints",
+      "source": "https://zenodo.org/records/3370489",
+      "files": [
+        "https://zenodo.org/records/3370489/files/bass-8d85a5bd.pth",
+        "https://zenodo.org/records/3370489/files/drums-9619578f.pth",
+        "https://zenodo.org/records/3370489/files/other-b52fbbf7.pth",
+        "https://zenodo.org/records/3370489/files/vocals-b62c91ce.pth"
+      ],
+      "license": "MIT",
+      "status": "VERIFIED",
+      "copied": false,
+      "notes": "Zenodo record metadata reports mit-license. This is a music-separation checkpoint family, not a semantic trigger model."
+    },
+    {
+      "name": "UMX bass/drums/other/vocals checkpoints",
+      "source": "https://zenodo.org/records/3370486",
+      "files": [
+        "https://zenodo.org/records/3370486/files/bass-646024d3.pth",
+        "https://zenodo.org/records/3370486/files/drums-5a48008b.pth",
+        "https://zenodo.org/records/3370486/files/other-f8e132cc.pth",
+        "https://zenodo.org/records/3370486/files/vocals-c8df74a5.pth"
+      ],
+      "license": "MIT",
+      "status": "VERIFIED",
+      "copied": false,
+      "notes": "Zenodo record metadata reports mit-license. The repository describes this family as MUSDB18-trained and bandwidth-limited."
+    },
+    {
+      "name": "UMX-L bass/drums/other/vocals checkpoints",
+      "source": "https://zenodo.org/records/5069601",
+      "files": [
+        "https://zenodo.org/records/5069601/files/bass-2ca1ce51.pth",
+        "https://zenodo.org/records/5069601/files/drums-69e0ebd4.pth",
+        "https://zenodo.org/records/5069601/files/other-c8c5b3e6.pth",
+        "https://zenodo.org/records/5069601/files/vocals-bccbd9aa.pth"
+      ],
+      "license": "CC-BY-NC-SA-4.0",
+      "status": "BLOCKED_LICENSE",
+      "copied": false,
+      "notes": "The upstream README explicitly says these weights are licensed for non-commercial use. Blocked by the intake policy."
+    },
+    {
+      "name": "UMX-SE speech/noise checkpoints",
+      "source": "https://zenodo.org/records/3786908",
+      "files": [
+        "https://zenodo.org/records/3786908/files/speech_f5e0d9f9.pth",
+        "https://zenodo.org/records/3786908/files/noise_04a6fc2d.pth"
+      ],
+      "license": "MIT",
+      "status": "VERIFIED",
+      "copied": false,
+      "notes": "Zenodo record metadata reports mit-license. No checkpoint was downloaded or copied into this intake."
+    }
+  ],
+  "useful_files": [
+    {
+      "upstream_path": "openunmix/transforms.py",
+      "local_path": "extracted/openunmix/transforms.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference batched Torch STFT, inverse STFT, Hann-window configuration, complex magnitude conversion, and the optional Asteroid filterbank path.",
+      "audioShield_target": "Future offline DSP/reconstruction reference; do not import into the MV3 runtime."
+    },
+    {
+      "upstream_path": "openunmix/data.py",
+      "local_path": "extracted/openunmix/data.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference dataset excerpt loading, duration-bounded random chunk selection, fixed chunk duration, and deterministic validation sampling.",
+      "audioShield_target": "Future benchmark fixture design for bounded audio windows; not a browser capture implementation."
+    },
+    {
+      "upstream_path": "openunmix/filtering.py",
+      "local_path": "extracted/openunmix/filtering.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference multichannel Wiener filtering and expectation-maximization refinement over complex STFT estimates.",
+      "audioShield_target": "Future offline reconstruction/separation benchmark only; not a production semantic separator."
+    },
+    {
+      "upstream_path": "openunmix/evaluate.py",
+      "local_path": "extracted/openunmix/evaluate.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference evaluation orchestration using MUSDB and museval, including SDR/SIR/SAR/ISR output handling.",
+      "audioShield_target": "Future offline separator evaluation harness; requires separately managed MUSDB and museval dependencies."
+    },
+    {
+      "upstream_path": "tests/test_transforms.py",
+      "local_path": "extracted/tests/test_transforms.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference round-trip STFT/ISTFT test and reconstruction error assertion.",
+      "audioShield_target": "Future offline DSP regression fixture."
+    },
+    {
+      "upstream_path": "tests/test_regression.py",
+      "local_path": "extracted/tests/test_regression.py",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Reference regression structure for separation metrics and spectrogram reproducibility.",
+      "audioShield_target": "Future offline benchmark design; depends on MUSDB fixtures and is not a browser test."
+    }
+  ],
+  "copied_files": [
+    {
+      "upstream_path": "LICENSE",
+      "local_path": "LICENSE",
+      "sha256": "4f7b047ffafb9fbb39a40d605bab961b9b030711addce6e9d23886c2ae3b105e",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Upstream license notice for the curated reference material."
+    },
+    {
+      "upstream_path": "openunmix/transforms.py",
+      "local_path": "extracted/openunmix/transforms.py",
+      "sha256": "7531fb42c241d99a8496bb0058f0e2522172f6cc9c27bb160fdb5ba0c94a918a",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "STFT, inverse STFT, and complex magnitude reference."
+    },
+    {
+      "upstream_path": "openunmix/data.py",
+      "local_path": "extracted/openunmix/data.py",
+      "sha256": "ec27b4af41599fef2358229486e31c1850354b0f611704ea2d4224e5902fef42",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Chunked audio dataset reference."
+    },
+    {
+      "upstream_path": "openunmix/filtering.py",
+      "local_path": "extracted/openunmix/filtering.py",
+      "sha256": "563dc9db44f39fd6051c12d7cc5ce3846494368406cba70f10241a0095bc912c",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Multichannel Wiener/reconstruction reference."
+    },
+    {
+      "upstream_path": "openunmix/evaluate.py",
+      "local_path": "extracted/openunmix/evaluate.py",
+      "sha256": "5a120b09c22711d79c0a2100b2f0f73c9119f60197e20f68dad0e40d749f6655",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Offline metrics orchestration reference."
+    },
+    {
+      "upstream_path": "tests/test_transforms.py",
+      "local_path": "extracted/tests/test_transforms.py",
+      "sha256": "d66be761ccf68544c6befdb91b480fee08e61431ddf6b622a842345c3b5fa58b",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "STFT/ISTFT round-trip test reference."
+    },
+    {
+      "upstream_path": "tests/test_regression.py",
+      "local_path": "extracted/tests/test_regression.py",
+      "sha256": "722eaa117bc445bf24045714c1804caff62182ceceb03bba72344d8558ccae1c",
+      "license": "MIT",
+      "classification": "REFERENCE_ONLY",
+      "purpose": "Offline metric and spectrogram regression test reference."
+    }
+  ],
+  "dependencies": [
+    "torch",
+    "torchaudio",
+    "numpy",
+    "tqdm",
+    "asteroid-filterbanks (optional filterbank path)",
+    "musdb (evaluation/test dependency)",
+    "museval (evaluation/test dependency)"
+  ],
+  "weights_copied": false,
+  "production_integration": false
+}

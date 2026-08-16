@@ -1,0 +1,15 @@
+{
+  "policy": "Only MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC accepted; external weights require separate explicit license",
+  "status": "COMPLETE_REPOSITORY_SCAN; MODEL_ARTIFACTS_REQUIRE_SEPARATE_REVIEW",
+  "known": {
+    "audiosep": "MIT",
+    "yamnet": "Apache-2.0",
+    "onnxruntime": "MIT",
+    "chrome_extensions_samples": "Apache-2.0",
+    "rnnoise": "BSD-3-Clause",
+    "semantic_hearing": "MIT",
+    "demucs": "MIT",
+    "open_unmix": "MIT"
+  },
+  "weights": "BLOCKED_UNKNOWN unless SOURCE.json records explicit artifact license"
+}

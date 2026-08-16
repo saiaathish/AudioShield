@@ -10,13 +10,48 @@ export class HybridDspSeparator implements SeparatorEngine {
   async process({ frame, targetClassId }: SeparatorRequest): Promise<SeparatorResult> {
     return this.processSync({ frame, targetClassId });
   }
-  processSync({ frame, targetClassId }: SeparatorRequest): SeparatorResult {
+  processSync({ frame, targetClassId, attenuationDb }: SeparatorRequest): SeparatorResult {
     if (!this.initialized) throw new Error("separator is not initialized");
-    const identity = targetClassId !== "dishes" || frame.samples.length > 16_384;
-    const samples = identity ? new Float32Array(frame.samples) : mask(frame.samples);
-    return { frame: { ...frame, samples }, backend: this.backend, targetAttenuationDb: 0, speechPreservationDb: 0, latencyMs: 0, diagnostics: { metricsAvailable: false, method: "dsp-hybrid", reason: "no-reference-stems" } };
+    const result = targetClassId === "alarm-siren" ? attenuateTonalAlarm(frame.samples, frame.sampleRate, attenuationDb) :
+      targetClassId === "dishes" && frame.samples.length <= 16_384 ? { samples: mask(frame.samples), attenuationDb: 0 } :
+      { samples: new Float32Array(frame.samples), attenuationDb: 0 };
+    return { frame: { ...frame, samples: result.samples }, backend: this.backend, targetAttenuationDb: result.attenuationDb, speechPreservationDb: 0, latencyMs: 0, diagnostics: { metricsAvailable: false, method: "dsp-hybrid", reason: "no-reference-stems" } };
   }
   async dispose(): Promise<void> { this.initialized = false; }
+}
+
+type AlarmResult = { samples: Float32Array; attenuationDb: number };
+
+/** Deterministic narrow P0 rescue: detect concentrated tonal energy, then subtract
+ * only the estimated dominant sinusoid. No model, filename, timestamp, or network. */
+function attenuateTonalAlarm(input: Float32Array, sampleRate: number, requestedDb = -12): AlarmResult {
+  const output = new Float32Array(input);
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return { samples: output, attenuationDb: 0 };
+  if (input.length < 128) return { samples: mask(input), attenuationDb: 0 };
+  const frequencies: number[] = [];
+  for (let hz = 500; hz <= Math.min(5000, sampleRate / 2 - 100); hz += 100) frequencies.push(hz);
+  let total = 0; for (const sample of input) total += sample * sample;
+  const rmsPower = total / input.length;
+  if (rmsPower < 1e-7) return { samples: output, attenuationDb: 0 };
+  let bestFrequency = 0; let bestPower = 0; let bestRe = 0; let bestIm = 0;
+  for (const frequency of frequencies) {
+    let re = 0; let im = 0;
+    for (let i = 0; i < input.length; i++) { const phase = 2 * Math.PI * frequency * i / sampleRate; re += input[i] * Math.cos(phase); im -= input[i] * Math.sin(phase); }
+    const power = 2 * (re * re + im * im) / (input.length * input.length);
+    if (power > bestPower) { bestPower = power; bestFrequency = frequency; bestRe = re; bestIm = im; }
+  }
+  const concentration = bestPower / Math.max(rmsPower, 1e-9);
+  const confidence = Math.max(0, Math.min(1, (concentration - 0.14) / 0.45));
+  if (confidence < 0.55 || bestFrequency === 0) return { samples: output, attenuationDb: 0 };
+  const requested = Math.max(0, Math.min(18, Math.abs(Number.isFinite(requestedDb) ? requestedDb : 12)));
+  const removal = Math.min(0.92, (1 - 10 ** (-requested / 20)) * confidence);
+  for (let i = 0; i < output.length; i++) {
+    const angle = 2 * Math.PI * bestFrequency * i / sampleRate;
+    const tone = 2 * (bestRe * Math.cos(angle) - bestIm * Math.sin(angle)) / input.length;
+    output[i] = clamp(output[i] - removal * tone);
+  }
+  const attenuationDb = 20 * Math.log10(Math.max(1e-6, 1 - removal));
+  return { samples: output, attenuationDb };
 }
 
 // Same high-band transient rule as model-tools/validate/hybrid-benchmark.mjs,

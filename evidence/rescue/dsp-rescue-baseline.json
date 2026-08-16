@@ -1,0 +1,15 @@
+{
+  "head": "353b4105e30de9079fba8ce65acb1c7c848622d8",
+  "branch": "main",
+  "build": "PASS",
+  "typecheck": "PASS",
+  "tests": {"passed": 49, "failed": 0},
+  "paths": {
+    "offscreenRuntime": "src/offscreen/runtime.ts",
+    "audioProcessor": "src/ml/separator/hybrid-dsp.ts",
+    "detector": "extension/src/ml/detector/yamnet-adapter.ts (weights blocked); deterministic alarm DSP in src/ml/separator/hybrid-dsp.ts",
+    "policy": "src/policy/trigger.ts",
+    "xray": "src/ui/main.tsx",
+    "bypass": "src/offscreen/runtime.ts"
+  }
+}

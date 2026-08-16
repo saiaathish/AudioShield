@@ -8,7 +8,7 @@ const LABELS: ReadonlyArray<readonly [P0SoundId, string[]]> = [
 ];
 
 export function normalizeLabel(label: string): { classId: P0SoundId; label: string } | undefined {
-  const normalized = label.trim().toLocaleLowerCase();
+  const normalized = label.trim().toLowerCase();
   const match = LABELS.find(([, aliases]) => aliases.some((alias) => normalized === alias || normalized.includes(alias)));
   return match ? { classId: match[0], label: match[0] } : undefined;
 }

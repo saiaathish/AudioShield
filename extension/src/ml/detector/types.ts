@@ -16,8 +16,18 @@ export interface AudioWindow {
 }
 
 export interface InferenceLabel { readonly label: string; readonly confidence: number; }
-export interface DetectorInference { infer(window: AudioWindow): Promise<readonly InferenceLabel[]>; dispose?(): Promise<void> | void; }
-export interface DetectorMetrics { readonly modelLoadMs: number; readonly inferenceLatencyMs: number; readonly windows: number; }
+export interface DetectorInference {
+  initialize?(): Promise<void>;
+  infer(window: AudioWindow): Promise<readonly InferenceLabel[]>;
+  dispose?(): Promise<void> | void;
+}
+export interface DetectorMetrics {
+  readonly modelLoadMs: number;
+  readonly inferenceLatencyMs: number;
+  readonly p50InferenceLatencyMs: number;
+  readonly p95InferenceLatencyMs: number;
+  readonly windows: number;
+}
 export interface SoundDetector {
   initialize(): Promise<void>;
   process(window: AudioWindow): Promise<readonly SoundDetection[]>;

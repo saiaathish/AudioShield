@@ -24,4 +24,11 @@ describe("HybridDspSeparator", () => {
   it("requires initialization", async () => {
     await expect(new HybridDspSeparator().process({ frame: { sampleRate: 16_000, channels: 1, samples: new Float32Array(1) }, targetClassId: "dishes" })).rejects.toThrow("initialized");
   });
+  it("attenuates dominant tonal alarm energy without global gain reduction", async () => {
+    const engine = new HybridDspSeparator(); await engine.initialize(); const sampleRate = 16_000; const input = new Float32Array(2048);
+    for (let i = 0; i < input.length; i++) input[i] = .22 * Math.sin(2 * Math.PI * 180 * i / sampleRate) + .38 * Math.sin(2 * Math.PI * 1200 * i / sampleRate);
+    const result = await engine.process({ frame: { sampleRate, channels: 1, samples: input }, targetClassId: "alarm-siren" });
+    const projection = (samples: Float32Array, hz: number) => { let re = 0; let im = 0; for (let i = 0; i < samples.length; i++) { const phase = 2 * Math.PI * hz * i / sampleRate; re += samples[i] * Math.cos(phase); im += samples[i] * Math.sin(phase); } return Math.hypot(re, im); };
+    expect(result.targetAttenuationDb).toBeLessThan(-3); expect(projection(result.frame.samples, 1200)).toBeLessThan(projection(input, 1200) * .8); expect(projection(result.frame.samples, 180)).toBeGreaterThan(projection(input, 180) * .75);
+  });
 });

@@ -1,0 +1,142 @@
+{
+  "repository": "https://github.com/Audio-AGI/AudioSep",
+  "commit": "944583f18b84589dc965de3ad77525c945334252",
+  "default_branch": "main",
+  "clone_timestamp_utc": "2026-08-16T14:50:28Z",
+  "license": "MIT",
+  "license_verified": true,
+  "license_file": "LICENSE",
+  "repo_status": "PRIMARY",
+  "model_weights": [
+    {
+      "name": "AudioSep base 4M steps checkpoint",
+      "source": "https://huggingface.co/spaces/Audio-AGI/AudioSep/blob/main/checkpoint/audiosep_base_4M_steps.ckpt",
+      "license": "MIT",
+      "status": "VERIFIED",
+      "artifact_size_bytes": 1264844076,
+      "artifact_sha256": "f8cda01bfd0ebd141eef45d41db7a3ada23a56568465840d3cff04b8010ce82c",
+      "evidence": "The Hugging Face Space declares MIT in cardData and ships an MIT LICENSE covering the repository; the file is listed in the checkpoint tree."
+    },
+    {
+      "name": "AudioSep demo checkpoint",
+      "source": "https://huggingface.co/nielsr/audiosep-demo/blob/main/pytorch_model.bin",
+      "license": "Apache-2.0",
+      "status": "VERIFIED",
+      "artifact_size_bytes": 957134817,
+      "artifact_sha256": "37f1691fb067e2575f1ad1cfbfe44b7b3da18e52f33fcb2b0937b72952f11ba1",
+      "evidence": "The model repository declares apache-2.0 in its model card and exposes the checkpoint as pytorch_model.bin."
+    },
+    {
+      "name": "CLAP music/speech/AudioSet checkpoint",
+      "source": "https://huggingface.co/lukewys/laion_clap/blob/main/music_speech_audioset_epoch_15_esc_89.98.pt",
+      "license": "CC0-1.0",
+      "status": "VERIFIED",
+      "artifact_size_bytes": 2352471003,
+      "artifact_sha256": "51c68f12f9d7ea25fdaaccf741ec7f81e93ee594455410f3bca4f47f88d8e006",
+      "evidence": "The named filename is documented by LAION-AI's CLAP README and the Hugging Face model repository declares cc0-1.0 in cardData."
+    },
+    {
+      "name": "RoBERTa base text encoder",
+      "source": "https://huggingface.co/FacebookAI/roberta-base",
+      "license": "MIT",
+      "status": "VERIFIED",
+      "evidence": "AudioSep calls RobertaTokenizer.from_pretrained(\"roberta-base\"); the resolved Hugging Face model card declares MIT."
+    },
+    {
+      "name": "Unresolved upstream checkpoint/audiosep_base.ckpt",
+      "source": "UNKNOWN; referenced by benchmark.py but no host or artifact license is given",
+      "license": "UNKNOWN",
+      "status": "BLOCKED_UNKNOWN",
+      "evidence": "The benchmark __main__ path names checkpoint/audiosep_base.ckpt, which is not the explicitly licensed file identified in the README/Hugging Face Space tree."
+    },
+    {
+      "name": "Unresolved upstream checkpoint/step=3920000.ckpt",
+      "source": "UNKNOWN; referenced by pipeline.py __main__ but no host or artifact license is given",
+      "license": "UNKNOWN",
+      "status": "BLOCKED_UNKNOWN",
+      "evidence": "The pipeline __main__ path names checkpoint/step=3920000.ckpt, which is not the explicitly licensed file identified in the README/Hugging Face Space tree."
+    }
+  ],
+  "useful_files": [
+    {
+      "upstream_path": "pipeline.py",
+      "local_path": "extracted/pipeline.py",
+      "source_blob_sha1": "baa03582d52c8b27c1f35f9352b055068bfd8ae9",
+      "classification": "ADAPT",
+      "purpose": "Reference 32 kHz mono intake, text-query embedding, separator invocation, and waveform serialization.",
+      "audioShield_target": "Future offline separator adapter; not production code."
+    },
+    {
+      "upstream_path": "models/audiosep.py",
+      "local_path": "extracted/models/audiosep.py",
+      "source_blob_sha1": "a3e602ae291a0f1c892100d38fcaee2ade079f6f",
+      "classification": "ADAPT",
+      "purpose": "Shows the PyTorch wrapper, query-encoder/separator contract, and checkpoint loading shape.",
+      "audioShield_target": "Future offline model harness."
+    },
+    {
+      "upstream_path": "models/clap_encoder.py",
+      "local_path": "extracted/models/clap_encoder.py",
+      "source_blob_sha1": "6cd6421f89e76af6fdb33cfdc85f632d81044baf",
+      "classification": "ADAPT",
+      "purpose": "Text conditioning path: RoBERTa tokenization into a frozen CLAP embedding of size 512.",
+      "audioShield_target": "Future fixed-query embedding/oracle tooling; not browser-ready as copied."
+    },
+    {
+      "upstream_path": "models/resunet.py",
+      "local_path": "extracted/models/resunet.py",
+      "source_blob_sha1": "4639b23750e56340fa395c6a3462993224c4f304",
+      "classification": "ADAPT",
+      "purpose": "Conditioned ResUNet separator, 2048/320 STFT configuration, phase-aware reconstruction, and chunk inference.",
+      "audioShield_target": "Offline oracle or a separately exported separator experiment."
+    },
+    {
+      "upstream_path": "models/base.py",
+      "local_path": "extracted/models/base.py",
+      "source_blob_sha1": "6b70dd804dcf9b9cf3a9aacd84c707852bab2d7c",
+      "classification": "ADAPT",
+      "purpose": "Shared waveform-to-spectrogram/phase and spectrogram-to-waveform helpers.",
+      "audioShield_target": "Future DSP/reconstruction reference."
+    },
+    {
+      "upstream_path": "utils.py",
+      "local_path": "extracted/utils.py",
+      "source_blob_sha1": "1ca65d6104c437e44302ee839a29d0d78e5f8a6c",
+      "classification": "ADAPT",
+      "purpose": "Model construction/checkpoint loading and SDR/SI-SDR metric implementations.",
+      "audioShield_target": "Offline benchmark harness."
+    },
+    {
+      "upstream_path": "config/audiosep_base.yaml",
+      "local_path": "extracted/config/audiosep_base.yaml",
+      "source_blob_sha1": "cb54d16397e523cb67a602a631276aa0770e7ae0",
+      "classification": "ADAPT",
+      "purpose": "Canonical 32 kHz, 5-second segment, 1-channel, 512-condition, ResUNet30 configuration.",
+      "audioShield_target": "Offline reproduction and export configuration."
+    },
+    {
+      "upstream_path": "benchmark.py",
+      "local_path": "extracted/benchmark.py",
+      "source_blob_sha1": "b209a15909c2d28360bd8be8e99d13ee7cd655fa",
+      "classification": "ADAPT",
+      "purpose": "Benchmark orchestration across AudioSet, AudioCaps, VGGSound, MUSIC, ESC-50, and Clotho.",
+      "audioShield_target": "Offline separation quality benchmark."
+    },
+    {
+      "upstream_path": "evaluation/evaluate_audiocaps.py",
+      "local_path": "extracted/evaluation/evaluate_audiocaps.py",
+      "source_blob_sha1": "a3a3d21a7380d6adea064c3c69cc2c587f6fc599",
+      "classification": "ADAPT",
+      "purpose": "Representative caption/label query evaluation and SDR improvement calculation.",
+      "audioShield_target": "Offline trigger-query benchmark adapter."
+    },
+    {
+      "upstream_path": "evaluation/evaluate_audioset.py",
+      "local_path": "extracted/evaluation/evaluate_audioset.py",
+      "source_blob_sha1": "21128bd6eed33336f55ccb4a1a2b20c853ce8a24",
+      "classification": "ADAPT",
+      "purpose": "Representative class-label query evaluation and per-class median aggregation.",
+      "audioShield_target": "Offline trigger-class benchmark adapter."
+    }
+  ]
+}

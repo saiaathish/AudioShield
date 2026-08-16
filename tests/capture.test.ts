@@ -22,18 +22,40 @@ describe("offscreen tab playback", () => {
     expect(source.disconnect).toHaveBeenCalledTimes(1);
     expect(stream.track.stop).toHaveBeenCalledTimes(1);
     expect(context.close).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(["unavailable", "idle"]);
+    expect(statuses).toEqual(["capturing", "unavailable", "idle"]);
+  });
+
+  it("coalesces concurrent starts for the same stream and does not leak on stop", async () => {
+    const stream = fakeStream();
+    let releaseCapture!: () => void;
+    const captureReady = new Promise<void>((resolve) => { releaseCapture = resolve; });
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const context = { destination: {}, createMediaStreamSource: vi.fn(() => source), resume: vi.fn(async () => undefined), close: vi.fn(async () => undefined) };
+    const getUserMedia = vi.fn(async () => { await captureReady; return stream; });
+    const runtime = createAudioRuntime(getUserMedia, () => context);
+    const firstStart = runtime.start("same-stream");
+    const secondStart = runtime.start("same-stream");
+    const stop = runtime.stop();
+    releaseCapture();
+    await Promise.all([firstStart, secondStart, stop]);
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(source.connect).toHaveBeenCalledTimes(1);
+    expect(stream.track.stop).toHaveBeenCalledTimes(1);
+    expect(context.close).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed and reports capture failure without retrying", async () => {
-    const getUserMedia = vi.fn(async () => { throw new Error("denied"); });
+    const getUserMedia = vi.fn(async () => { const error = new Error("denied"); error.name = "NotAllowedError"; throw error; });
     const runtime = createAudioRuntime(getUserMedia, () => ({ destination: {}, createMediaStreamSource: vi.fn(), resume: vi.fn(), close: vi.fn(async () => undefined) }));
-    const statuses: string[] = [];
-    runtime.onStatus((status) => statuses.push(status.state));
+    const statuses: Array<{ state: string; code?: string }> = [];
+    runtime.onStatus((status) => statuses.push(status));
     await runtime.start("denied");
     await runtime.start("denied");
     expect(getUserMedia).toHaveBeenCalledTimes(2);
-    expect(statuses).toEqual(["error", "error"]);
+    expect(statuses).toEqual([
+      { state: "error", code: "CAPTURE_GET_USER_MEDIA_FAILED", stage: "GET_USER_MEDIA_START", rawName: "NotAllowedError", rawMessage: "denied" },
+      { state: "error", code: "CAPTURE_GET_USER_MEDIA_FAILED", stage: "GET_USER_MEDIA_START", rawName: "NotAllowedError", rawMessage: "denied" },
+    ]);
   });
 
   it("stops when Chrome ends the captured track", async () => {
@@ -60,7 +82,7 @@ describe("offscreen tab playback", () => {
     await runtime.setBypass(true);
     await runtime.setBypass(false);
     expect(source.connect).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(["unavailable", "bypassed", "capturing"]);
+    expect(statuses).toEqual(["capturing", "unavailable", "bypassed", "capturing"]);
   });
 
   it("uses one hybrid processing route when the context supports processing", async () => {
@@ -74,7 +96,8 @@ describe("offscreen tab playback", () => {
     await runtime.start("hybrid-stream");
     expect(source.connect).toHaveBeenCalledWith(processor);
     expect(processor.connect).toHaveBeenCalledWith(context.destination);
-    expect(statuses).toEqual(["protecting"]);
+    expect(context.createScriptProcessor).toHaveBeenCalledWith(1024, 0, 0);
+    expect(statuses).toEqual(["capturing", "protecting"]);
     const speech = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 2 * index / 64) * 0.4);
     const transient = Float32Array.from({ length: 64 }, (_, index) => Math.sin(2 * Math.PI * 20 * index / 64) * 0.4);
     const run = (input: Float32Array) => {
@@ -95,11 +118,13 @@ describe("background capture lifecycle", () => {
     const listeners: Array<(message: unknown) => void> = [];
     const removed: Array<(tabId: number) => Promise<void>> = [];
     const chromeMock = {
+      action: { onClicked: { addListener: vi.fn() } },
+      sidePanel: { open: vi.fn(async () => undefined) },
       runtime: {
         sendMessage: vi.fn(async () => undefined),
         onMessage: { addListener: (listener: (message: unknown) => void) => listeners.push(listener) },
       },
-      tabs: { onRemoved: { addListener: (listener: (tabId: number) => Promise<void>) => removed.push(listener) } },
+      tabs: { query: vi.fn(async () => [{ id: 12 }]), onRemoved: { addListener: (listener: (tabId: number) => Promise<void>) => removed.push(listener) } },
       tabCapture: { getMediaStreamId: vi.fn((_options: unknown, callback: (streamId: string) => void) => callback("stream-1")) },
       offscreen: { Reason: { AUDIO_PLAYBACK: "AUDIO_PLAYBACK" }, hasDocument: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true), createDocument: vi.fn(async () => undefined), closeDocument: vi.fn(async () => undefined) },
     };
@@ -115,6 +140,9 @@ describe("background capture lifecycle", () => {
     await stopProtection(7);
     expect(chromeMock.offscreen.closeDocument).toHaveBeenCalledTimes(1);
     await stopProtection();
+    await startProtection();
+    expect(chromeMock.tabCapture.getMediaStreamId).toHaveBeenCalledWith({ targetTabId: 12 }, expect.any(Function));
+    await stopProtection(12);
     vi.unstubAllGlobals();
     expect(listeners).toHaveLength(2);
   });

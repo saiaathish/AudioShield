@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "status": "MEASURED_OFFLINE_ORACLE",
+  "verdict": "GREEN_OFFLINE_ORACLE",
+  "repoHead": "353b4105e30de9079fba8ce65acb1c7c848622d8",
+  "source": {
+    "repository": "https://github.com/AlayaLab/Hive",
+    "commit": "f41b507d6be616ba864a5cd538b071338b6bd90d",
+    "license": "Apache-2.0",
+    "licenseFile": "LICENCE"
+  },
+  "model": {
+    "repository": "https://huggingface.co/AlayaLab/AudioSep-hive",
+    "revision": "113d2e4399a4f19b6a0d567bbde38f2fe1b11794",
+    "modelCardLicense": "apache-2.0",
+    "checkpoint": {
+      "path": "audiosep_hive.ckpt",
+      "bytes": 1264846755,
+      "sha256": "a13fff5fa4ece1a8bc13e42e1c7b8d90e21603075302ca89e4339c9471973300"
+    },
+    "clapCheckpoint": {
+      "path": "music_speech_audioset_epoch_15_esc_89.98.pt",
+      "bytes": 2352471003,
+      "sha256": "51c68f12f9d7ea25fdaaccf741ec7f81e93ee594455410f3bca4f47f88d8e006"
+    },
+    "config": {
+      "sampleRateHz": 32000,
+      "segmentSeconds": 5,
+      "modelType": "ResUNet30",
+      "conditionSize": 512
+    }
+  },
+  "transitiveModel": {
+    "repository": "https://huggingface.co/FacebookAI/roberta-base",
+    "revision": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+    "license": "MIT",
+    "use": "CLAP text encoder"
+  },
+  "fixture": {
+    "manifest": "evidence/semantic-hearing/fixture/manifest.json",
+    "id": "semantic-hearing-speech-dishes-v1",
+    "sourceSampleRateHz": 44100,
+    "sourceChannels": 2,
+    "durationSeconds": 1,
+    "query": "dishes clattering",
+    "modelInput": "downmixed mono and resampled to 32000 Hz"
+  },
+  "runtime": {
+    "python": "3.13.2",
+    "torch": "2.12.1",
+    "torchaudio": "2.11.0",
+    "device": "cpu",
+    "inferenceSeconds": 22.81,
+    "maxResidentBytes": 1769275392,
+    "peakMemoryFootprintBytes": 5706143624,
+    "productionWiring": false,
+    "browserInference": "NOT_TESTED"
+  },
+  "metrics": {
+    "attenuationDb": -14,
+    "targetEstimateVsDishesSiSdrDb": 10.682373046875,
+    "residualSpeechVsSpeechSiSdrDb": 15.173462867736816,
+    "mixtureVsSpeechSiSdrDb": 4.231410026550293,
+    "processed": {
+      "speechAmplitudeGain": 0.9950881600379944,
+      "speechGainDb": -0.04276882283555204,
+      "dishesAmplitudeGain": 0.23859061300754547,
+      "dishesGainDb": -12.446932939987455,
+      "unexplainedResidualRms": 0.01663283444941044
+    },
+    "globalDuck": {
+      "speechAmplitudeGain": 0.1995260864496231,
+      "speechGainDb": -14.000006314282505,
+      "dishesAmplitudeGain": 0.19952642917633057,
+      "dishesGainDb": -13.999991394510092,
+      "unexplainedResidualRms": 0.0000015808450370968785
+    }
+  },
+  "outputs": {
+    "target-dishes.wav": {
+      "path": "evidence/audiosep-hive/output/target-dishes.wav",
+      "bytes": 64044,
+      "sha256": "e76276d350e463bac4cfba05d916eb9a9bd53e7e5f63c3ae1721d93c9dc23312"
+    },
+    "residual-speech.wav": {
+      "path": "evidence/audiosep-hive/output/residual-speech.wav",
+      "bytes": 64044,
+      "sha256": "c59395f85421ebf5ce81581117c7af053950dd3742e04b94819a62fea22dc23d"
+    },
+    "processed-mixture.wav": {
+      "path": "evidence/audiosep-hive/output/processed-mixture.wav",
+      "bytes": 64044,
+      "sha256": "a165d6b8787baad58e975892dde2dd8d659520cb77720478eb52f224c86e8b17"
+    },
+    "global-duck.wav": {
+      "path": "evidence/audiosep-hive/output/global-duck.wav",
+      "bytes": 64044,
+      "sha256": "b02afab267893b828dbfcfc4601e53301b61fbb000eed291d6ad206142084502"
+    }
+  },
+  "limits": [
+    "This is a deterministic synthetic 1-second fixture, not live Chrome or real-world speech+dishes proof.",
+    "The processed output is mixture minus the queried target estimate plus a -14 dB target estimate; it is not perfect source isolation.",
+    "The official source script names the historical ShandaAI/AudioSep-hive host; this run used the pinned transferred AlayaLab/AudioSep-hive repo.",
+    "No production wiring, browser bundle, or user-audio upload was performed."
+  ]
+}

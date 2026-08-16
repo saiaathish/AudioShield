@@ -1,2 +1,7 @@
-node_modules/
+# Local model/cache artifacts and OS/Python noise; never commit these.
+$TMP_ROOT/
+.DS_Store
+__pycache__/
+*.pyc
 dist/
+node_modules/

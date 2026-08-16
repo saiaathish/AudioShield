@@ -4,7 +4,7 @@ import type { RuntimeMessage } from "../src/shared/messages/types";
 
 describe("popup UI contracts", () => {
   it("names every P0 trigger for accessible controls", () => {
-    expect(Object.keys(labels)).toEqual(["alarm-siren", "dishes-clatter", "applause"]);
+    expect(Object.keys(labels)).toEqual(["alarm-siren"]);
     expect(Object.values(labels).every((item) => item.name && item.hint)).toBe(true);
   });
 

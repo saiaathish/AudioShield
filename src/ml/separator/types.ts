@@ -5,6 +5,7 @@ export type SeparatorBackend = "onnx-webgpu" | "onnx-wasm" | "dsp-hybrid" | "una
 export interface SeparatorRequest {
   readonly frame: AudioFrame;
   readonly targetClassId: string;
+  readonly attenuationDb?: number;
 }
 
 export interface SeparatorResult {

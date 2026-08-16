@@ -1,0 +1,163 @@
+{
+  "component": "rnnoise",
+  "upstream": {
+    "repository": "https://github.com/xiph/rnnoise.git",
+    "canonical_repository": "https://gitlab.xiph.org/xiph/rnnoise",
+    "clone_path": "/tmp/audioshield-oss-scan/rnnoise",
+    "commit": "70f1d256acd4b34a572f999a05c87bf00b67730d",
+    "commit_verification": "git -C /tmp/audioshield-oss-scan/rnnoise rev-parse HEAD"
+  },
+  "license": {
+    "name": "BSD-3-Clause",
+    "evidence": "Repository-root COPYING at the pinned commit; copied verbatim to LICENSE.",
+    "source_blob": "59d7d09c80c17e60a972bf730caf6a3e005b17b1",
+    "license_sha256": "45d37ca1cdb278c088e1aa85e0e65ca3a534ed86a28dcc96ca16810248a61d35",
+    "headers": "Curated source files retain their upstream BSD license/copyright headers; common.h and rnnoise_tables.c rely on repository COPYING."
+  },
+  "curation": {
+    "status": "SOURCE_SAFE_WITH_MODEL_BLOCKER",
+    "scope": "Low-latency frame/DSP and RNN implementation references only; no production integration.",
+    "copied_files": [
+      {
+        "destination": "extracted/rnnoise.h",
+        "source": "include/rnnoise.h",
+        "classification": "REUSABLE_INTERFACE",
+        "upstream_blob": "81d8f62341ab39e51da0bd7332b905d79f36b782",
+        "sha256": "15ca0f5c0db9dfa48907e91a32995d37e57552b0e14fef5ebb8d3dc073528f83"
+      },
+      {
+        "destination": "extracted/denoise.c",
+        "source": "src/denoise.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "b6fc3d4a90e13184e5b94b892796a8288d8260db",
+        "sha256": "f12ac3cc97d798cdfd7c7bd4366a08a72c5516c382056c891b61a61cb17eb031"
+      },
+      {
+        "destination": "extracted/denoise.h",
+        "source": "src/denoise.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "ccfecd9a7e2d6e0b337a93c29a9d1a8acb2b171a",
+        "sha256": "3ea8149b47b51b76a1eef308cc38168731693b74ed3f64330b55583f92dcc071"
+      },
+      {
+        "destination": "extracted/rnn.c",
+        "source": "src/rnn.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "b9472384a6751c1496229be2eb42be247839465f",
+        "sha256": "c40bbe40082448005873fe970d8963870ab2c9993b7c38d6939ca48f4f31a7bd"
+      },
+      {
+        "destination": "extracted/rnn.h",
+        "source": "src/rnn.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "60a8871e7a89161e57c037cf89e2ecb6035269e3",
+        "sha256": "2fe9f33534fbfa35a7d5c81323f1ec4e9ec06e28328815c7c88880e83f994566"
+      },
+      {
+        "destination": "extracted/nnet.c",
+        "source": "src/nnet.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "3cafea6051a858ba316a32478b59255863fb7222",
+        "sha256": "3a2c1dc09ad7e9dfe3cf32cfb94694935dc462488da8f513d1f308db39f7c087"
+      },
+      {
+        "destination": "extracted/nnet.h",
+        "source": "src/nnet.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "6b8023bdb03b9dfa49728a3dbe76c1f32bc8fc6d",
+        "sha256": "3552cf2fcfc4db28ac683bcc8a5dc7b72fad7140b3df43d0f8d2d5afe3abe4dd"
+      },
+      {
+        "destination": "extracted/nnet_arch.h",
+        "source": "src/nnet_arch.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "dfd5eaadeaf6b8ee00257de58d0c114e32d52aa3",
+        "sha256": "76068e63007b072b0c20410cee89c0ab5158438d5201b466850354c0aee33688"
+      },
+      {
+        "destination": "extracted/kiss_fft.c",
+        "source": "src/kiss_fft.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "97c4291756f1c5128fa0842bc38d23e88948825d",
+        "sha256": "2a9f9ee0d961ec6516864477640d78aedbf1c3ecbe1680727b4b93d486c09679"
+      },
+      {
+        "destination": "extracted/kiss_fft.h",
+        "source": "src/kiss_fft.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "52387f21f9caaeb171559a23f20d0a6e57641c7c",
+        "sha256": "434613feace5466e73fb6593f3abeaca6c7da3ec5af3f4a475f54a6962324526"
+      },
+      {
+        "destination": "extracted/_kiss_fft_guts.h",
+        "source": "src/_kiss_fft_guts.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "17392b3e90977b74049049b7fa01a9f8cb0fc093",
+        "sha256": "0214dfe2aabb3b81d88fe814b8253fc2ec6da12bbbc98e08c1011a5bd60e3b29"
+      },
+      {
+        "destination": "extracted/rnnoise_tables.c",
+        "source": "src/rnnoise_tables.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "adc8a28f451274bbd2156c13a3dfa883ac5d0f82",
+        "sha256": "f81353479c6f8912755a4cf5838590c36ba2c523a4a438e4f949743fb4945623"
+      },
+      {
+        "destination": "extracted/pitch.c",
+        "source": "src/pitch.c",
+        "classification": "REFERENCE",
+        "upstream_blob": "486a7fc4a70d11ed7e27e7833c7bf533649f4e95",
+        "sha256": "cfe6f5ffb4b5f5967ce2e64f22cc978c1f8196eecdb2fa532d4dd1ff56f6ca58"
+      },
+      {
+        "destination": "extracted/pitch.h",
+        "source": "src/pitch.h",
+        "classification": "REFERENCE",
+        "upstream_blob": "0a9d5e57f74e338865dd8e0423b760b22ac3ceb0",
+        "sha256": "020be5b3fbc5289cd76930b0534efaa25dbda0cecd8643ee345cfd9d875a3818"
+      },
+      {
+        "destination": "extracted/common.h",
+        "source": "src/common.h",
+        "classification": "REFERENCE_SUPPORT",
+        "upstream_blob": "f9095ca5e85ed8686f7af5c3e63dd963a726f52b",
+        "sha256": "f4975c4ee283a030b08dff4fe26847cc84e2fae340794922fae32aba5cc8e4e6"
+      },
+      {
+        "destination": "extracted/arch.h",
+        "source": "src/arch.h",
+        "classification": "REFERENCE_SUPPORT",
+        "upstream_blob": "52de62334b71a7d07fac3daa4ae6c104d63d0718",
+        "sha256": "1686a3ca5817bb7d99049a1801c6ab3a7e91a5d0a6804b1c1cafb36e5eeb62f8"
+      },
+      {
+        "destination": "extracted/opus_types.h",
+        "source": "src/opus_types.h",
+        "classification": "REFERENCE_SUPPORT",
+        "upstream_blob": "71808266655a1502105ea4c68f15e8ff0be932e4",
+        "sha256": "e2c1075e26567b8d57706d2f0042e36d5d440721fc3fd27a6fce9f0fc8a31557"
+      },
+      {
+        "destination": "extracted/vec.h",
+        "source": "src/vec.h",
+        "classification": "REFERENCE_SUPPORT",
+        "upstream_blob": "71b7afbb8b0289165155eff2c5956f23b8c605ed",
+        "sha256": "54b02c6922e5180e040b8be28cf878783f550efc0e425d1d90b081e8c50932f5"
+      }
+    ],
+    "not_copied": [
+      {
+        "item": "default and little model weights",
+        "source": "external archive named rnnoise_data-<model_version>.tar.gz",
+        "status": "BLOCKED_UNKNOWN_LICENSE",
+        "evidence": "The pinned repository contains only model_version and download_model.sh; the archive is fetched from media.xiph.org and its license is not stated in the repository intake evidence.",
+        "expected_archive_sha256": "0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37"
+      },
+      {
+        "item": "training datasets and external RIR/noise archives",
+        "status": "BLOCKED_UNVERIFIED_LICENSE",
+        "evidence": "README links to external datasets and archives without licenses verified here."
+      }
+    ]
+  }
+}

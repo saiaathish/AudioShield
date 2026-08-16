@@ -5,17 +5,19 @@ import type { TriggerRule } from "../settings/types";
 export type EngineStatus =
   | { state: "idle" }
   | { state: "loading-models" }
+  | { state: "starting"; tabId: number }
   | { state: "capturing"; tabId: number }
   | { state: "protecting"; tabId: number; engine: "dsp-hybrid" }
   | { state: "unavailable"; tabId: number; code: "SEPARATOR_UNAVAILABLE" }
   | { state: "bypassed"; tabId: number }
-  | { state: "error"; code: string };
+  | { state: "error"; code: string; stage?: string; rawName?: string; rawMessage?: string; chromeMessage?: string; tabId?: number; scheme?: string; host?: string };
 
 export type RuntimeMessage =
   | { type: "PROTECTION_START"; tabId: number }
   | { type: "PROTECTION_STOP"; tabId: number }
   | { type: "BYPASS_SET"; enabled: boolean }
   | { type: "TRIGGER_RULES_SET"; rules: TriggerRule[] }
+  | { type: "PROTECTION_RULES_UPDATE"; rules: Pick<TriggerRule, "id" | "enabled" | "strength">[]; masterStrength: number }
   | { type: "SENSORY_EVENT"; event: SensoryEvent }
   | { type: "ENGINE_STATUS"; status: EngineStatus }
   | { type: "ENGINE_ERROR"; error: AudioShieldError };

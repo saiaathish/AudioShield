@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-08-16T15:33:14Z",
+  "status": "RESEARCH_COMPLETE",
+  "verdict": "NO_BROWSER_READY_MODEL_WITH_FULL_WEIGHT_CLEARANCE_FOUND",
+  "lane": "Worker A legal model rescue",
+  "scope": "Official-source provenance and licensing research only; no inference run and no production edits.",
+  "repo": {
+    "path": "/Users/saiaathishkarthik/Desktop/AudioShield",
+    "head": "353b4105e30de9079fba8ce65acb1c7c848622d8",
+    "branch": "main",
+    "workingTree": "dirty_before_lane_artifacts",
+    "productionFilesChangedByThisLane": false
+  },
+  "policy": {
+    "acceptedLicenses": ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC"],
+    "unknownOrUnclearWeightLicenseIsSafeToUse": false,
+    "unknownWeightsDownloaded": false,
+    "networkUse": "Metadata, source text, model-card text, API listings, and HTTP HEAD requests only; model bodies were not downloaded."
+  },
+  "summary": {
+    "safeToUseModels": [
+      "speechbrain/sepformer-wham",
+      "speechbrain/sepformer-whamr16k"
+    ],
+    "safeToUseScope": "The SpeechBrain entries are legally usable at the declared model-artifact/code license scope, but they are offline PyTorch speech-separation candidates, not browser-ready or semantically dishes-selective proof.",
+    "blockedWeightModels": [
+      "YAMNet",
+      "AudioSep-hive",
+      "Waveformer",
+      "RNNoise"
+    ],
+    "browserReadyCandidate": null,
+    "inferenceResults": "NOT_RUN",
+    "browserResults": "NOT_RUN"
+  },
+  "models": [
+    {
+      "id": "yamnet",
+      "role": "Environmental sound detector",
+      "safe_to_use": false,
+      "safe_to_use_scope": "Source code only; separately hosted weights are not cleared.",
+      "verdict": "BLOCKED_UNKNOWN_WEIGHT_LICENSE",
+      "code": {
+        "repositoryUrl": "https://github.com/tensorflow/models",
+        "repositoryPath": "research/audioset/yamnet",
+        "revision": "dd3514a41bc2fbafb2d15b58ba36ef20933866d4",
+        "revisionUrl": "https://github.com/tensorflow/models/commit/dd3514a41bc2fbafb2d15b58ba36ef20933866d4",
+        "license": "Apache-2.0",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/tensorflow/models/dd3514a41bc2fbafb2d15b58ba36ef20933866d4/LICENSE",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "YAMNet Keras HDF5 weights",
+          "url": "https://storage.googleapis.com/audioset/yamnet.h5",
+          "revision": "Official fixed URL; no repository commit is published for this binary.",
+          "observedBytes": 15296092,
+          "observedEtag": "8234225c045859752bd4a2e101f8cd1a",
+          "license": null,
+          "licenseStatus": "UNKNOWN",
+          "downloaded": false,
+          "evidence": "The pinned official README links the binary but does not state a weight license. The official HTTP HEAD exposed size/ETag only."
+        },
+        {
+          "name": "TensorFlow Hub SavedModel archive",
+          "url": "https://tfhub.dev/google/yamnet/1?tf-hub-format=compressed",
+          "resolvedUrlObserved": "https://www.kaggle.com/models/google/yamnet/tensorFlow2/yamnet/1?tf-hub-format=compressed&tfhub-redirect=true",
+          "revision": "TensorFlow Hub model version 1",
+          "observedBytes": null,
+          "license": null,
+          "licenseStatus": "UNKNOWN",
+          "downloaded": false,
+          "evidence": "The current endpoint redirects to the Kaggle model page; the fetched page did not expose a machine-readable artifact license or archive size, and no LICENSE/NOTICE was downloaded."
+        }
+      ],
+      "modelContract": {
+        "classes": 521,
+        "inputSampleRateHz": 16000,
+        "inputChannels": 1,
+        "patchWindowSeconds": 0.96,
+        "patchHopSeconds": 0.48,
+        "parameterCountReported": 3700000,
+        "multiplyCountReportedPer960msFrame": 69200000,
+        "verifiedTargetLabels": [
+          "Speech",
+          "Applause",
+          "Dishes, pots, and pans",
+          "Cutlery, silverware",
+          "Chopping (food)",
+          "Alarm",
+          "Siren",
+          "Clatter"
+        ]
+      },
+      "runtime": {
+        "officialPath": "Python TensorFlow/Keras inference; repository also documents TFLite/TFJS export tooling.",
+        "browserStatus": "UNVERIFIED",
+        "resourceStatus": "Small relative to separator candidates, but a licensed artifact and browser export are still required."
+      },
+      "localEvidencePaths": [
+        "third_party/audioshield_components/yamnet/SOURCE.json",
+        "third_party/audioshield_components/yamnet/USEFUL_COMPONENTS.md",
+        "third_party/audioshield_components/yamnet/LICENSE",
+        "third_party/audioshield_components/yamnet/extracted/research/audioset/yamnet/yamnet_class_map.csv"
+      ]
+    },
+    {
+      "id": "audiosep-hive",
+      "role": "Query-based universal sound separator",
+      "safe_to_use": false,
+      "safe_to_use_scope": "Repository code is Apache-2.0; model and transitive CLAP artifacts are not accepted as fully cleared by this conservative gate.",
+      "verdict": "LEGAL_CAVEAT_AND_OFFLINE_ONLY",
+      "code": {
+        "repositoryUrl": "https://github.com/AlayaLab/Hive",
+        "modelCardRepositoryAlias": "https://github.com/ShandaAI/Hive",
+        "revision": "f41b507d6be616ba864a5cd538b071338b6bd90d",
+        "revisionUrl": "https://github.com/AlayaLab/Hive/commit/f41b507d6be616ba864a5cd538b071338b6bd90d",
+        "license": "Apache-2.0",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/AlayaLab/Hive/f41b507d6be616ba864a5cd538b071338b6bd90d/LICENCE",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "AudioSep-hive separator checkpoint",
+          "url": "https://huggingface.co/ShandaAI/AudioSep-hive/resolve/113d2e4399a4f19b6a0d567bbde38f2fe1b11794/audiosep_hive.ckpt",
+          "modelCardUrl": "https://huggingface.co/ShandaAI/AudioSep-hive/blob/113d2e4399a4f19b6a0d567bbde38f2fe1b11794/README.md",
+          "revision": "113d2e4399a4f19b6a0d567bbde38f2fe1b11794",
+          "observedBytes": 1264846755,
+          "sha256": "a13fff5fa4ece1a8bc13e42e1c7b8d90e21603075302ca89e4339c9471973300",
+          "license": "Apache-2.0",
+          "licenseStatus": "SELF_DECLARED_WITH_CAVEAT",
+          "downloaded": false,
+          "evidence": "HF metadata declares apache-2.0, while the model card says 'Apache 2.0 (Please update if different)'; no separate per-checkpoint license file was present."
+        },
+        {
+          "name": "CLAP music/speech/AudioSet checkpoint required by official inference script",
+          "url": "https://huggingface.co/ShandaAI/AudioSep-hive/resolve/113d2e4399a4f19b6a0d567bbde38f2fe1b11794/music_speech_audioset_epoch_15_esc_89.98.pt",
+          "revision": "113d2e4399a4f19b6a0d567bbde38f2fe1b11794",
+          "observedBytes": 2352471003,
+          "sha256": "51c68f12f9d7ea25fdaaccf741ec7f81e93ee594455410f3bca4f47f88d8e006",
+          "license": null,
+          "licenseStatus": "NO_SEPARATE_ARTIFACT_LICENSE_FOUND",
+          "downloaded": false,
+          "evidence": "The pinned official Hive inference script downloads this file, but the model repository does not provide a separate license for the CLAP file."
+        }
+      ],
+      "runtime": {
+        "officialPath": "AlayaLab/Hive infer_audiosep.py with PyTorch, torchaudio, librosa, PyYAML, PyTorch Lightning, and Hugging Face Hub.",
+        "inputSampleRateHz": 32000,
+        "inputChannels": 1,
+        "queryMode": "Text query; official script accepts a target description.",
+        "requiredDownloadBytes": 3617317758,
+        "browserStatus": "NO_OFFICIAL_BROWSER_PATH",
+        "resourceStatus": "Offline/local companion only on evidence available; approximately 3.62 GB of two model artifacts before dependencies."
+      },
+      "localEvidencePaths": [
+        "third_party/audioshield_components/audiosep/SOURCE.json",
+        "third_party/audioshield_components/audiosep/USEFUL_COMPONENTS.md",
+        "third_party/audioshield_components/audiosep/LICENSE"
+      ],
+      "localEvidenceNote": "These files document the earlier Audio-AGI/AudioSep intake, not the newer AudioSep-hive checkpoint; they do not establish Hive model or CLAP weight licensing."
+    },
+    {
+      "id": "waveformer",
+      "role": "Low-latency target sound extraction",
+      "safe_to_use": false,
+      "safe_to_use_scope": "MIT source is reusable; hosted checkpoints have no explicit license located in the official repository or download documentation.",
+      "verdict": "BLOCKED_UNKNOWN_CHECKPOINT_LICENSE",
+      "code": {
+        "repositoryUrl": "https://github.com/vb000/Waveformer",
+        "revision": "db51a4916e8001db1d6fde8cc9c19a3bed82a1b5",
+        "revisionUrl": "https://github.com/vb000/Waveformer/commit/db51a4916e8001db1d6fde8cc9c19a3bed82a1b5",
+        "license": "MIT",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/vb000/Waveformer/db51a4916e8001db1d6fde8cc9c19a3bed82a1b5/LICENSE",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "Official default streaming checkpoint",
+          "url": "https://targetsound.cs.washington.edu/files/default_ckpt.pt",
+          "revision": "Hosted fixed URL; no model revision or checksum published in the inspected source.",
+          "observedBytes": 46902639,
+          "observedEtag": "2cbad6f-5ec6fbeeb3616",
+          "license": null,
+          "licenseStatus": "UNKNOWN",
+          "downloaded": false
+        },
+        {
+          "name": "Official experiment checkpoints archive",
+          "url": "https://targetsound.cs.washington.edu/files/experiments.zip",
+          "revision": "Hosted fixed URL; no model revision or checksum published in the inspected source.",
+          "observedBytes": 260959018,
+          "license": null,
+          "licenseStatus": "UNKNOWN",
+          "downloaded": false
+        }
+      ],
+      "runtime": {
+        "officialPath": "Python/PyTorch Waveformer.py; downloads default_config.json and default_ckpt.pt on first run.",
+        "supportedTargetsObserved": ["Applause", "Computer_keyboard", "Cough"],
+        "inputChunkSecondsReported": 0.01,
+        "reportedEndToEndLatencyMs": "<20 on one-thread Core i5",
+        "reportedRealTimeFactor": "0.66-0.94 depending on configuration on one-thread Core i5",
+        "browserStatus": "NO_OFFICIAL_BROWSER_PATH",
+        "resourceStatus": "Potentially local real-time candidate, but not legally bundleable until checkpoint terms are explicit; no dishes target was observed in the official target list."
+      },
+      "localEvidencePaths": []
+    },
+    {
+      "id": "speechbrain-sepformer-wham",
+      "role": "Speech-preserving residual fallback",
+      "safe_to_use": true,
+      "safe_to_use_scope": "Model card and source code declare Apache-2.0; this is a legal clearance result, not functional or browser proof.",
+      "verdict": "LICENSE_CLEARED_OFFLINE_CANDIDATE",
+      "code": {
+        "repositoryUrl": "https://github.com/speechbrain/speechbrain",
+        "trainingRevision": "e375cd130e44aaa18561f3a1024a61c5eff2d124",
+        "trainingRevisionUrl": "https://github.com/speechbrain/speechbrain/commit/e375cd130e44aaa18561f3a1024a61c5eff2d124",
+        "license": "Apache-2.0",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/speechbrain/speechbrain/e375cd130e44aaa18561f3a1024a61c5eff2d124/LICENSE",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "SepFormer WHAM model repository",
+          "url": "https://huggingface.co/speechbrain/sepformer-wham/tree/3f70635a1a640713e5af867b35de7929834bdeda",
+          "revision": "3f70635a1a640713e5af867b35de7929834bdeda",
+          "license": "Apache-2.0",
+          "licenseStatus": "VERIFIED_MODEL_CARD_AND_HF_METADATA",
+          "downloaded": false,
+          "inferencePayload": {
+            "masknet.ckptBytes": 113112646,
+            "encoder.ckptBytes": 17272,
+            "decoder.ckptBytes": 17272,
+            "inferencePayloadBytes": 113147190,
+            "optimizer.ckptBytesNotRequiredForInference": 205694713,
+            "masknetLfsSha256": "f058bffbc94d3ac3fb2481239b9eda589cb53484d312714180c98ae5fee8bbf3",
+            "encoderLfsSha256": "a33283041ba9a4cc292bc31ea14b1bfccad8304be822480571eaf95f9ccb0301",
+            "decoderLfsSha256": "d9a06998d188f9fa0cb79915dc855aac4737c41392488b11d500b453000f4dfa"
+          }
+        }
+      ],
+      "runtime": {
+        "officialPath": "SpeechBrain SepformerSeparation.from_hparams(source=\"speechbrain/sepformer-wham\")",
+        "inputSampleRateHz": 8000,
+        "inputChannels": 1,
+        "dependencies": ["speechbrain", "torch", "torchaudio"],
+        "execution": "PyTorch CPU or CUDA; official card documents optional CUDA device selection.",
+        "browserStatus": "NO_OFFICIAL_BROWSER_PATH",
+        "functionalScope": "Two-source speech separation trained on WHAM environmental-noise mixtures; not a semantic dishes separator and not tested in this lane."
+      },
+      "localEvidencePaths": []
+    },
+    {
+      "id": "speechbrain-sepformer-whamr16k",
+      "role": "Speech-preserving residual fallback for the extension's 16 kHz audio path",
+      "safe_to_use": true,
+      "safe_to_use_scope": "Model card and source code declare Apache-2.0; this is a legal clearance result, not functional or browser proof.",
+      "verdict": "LICENSE_CLEARED_OFFLINE_CANDIDATE",
+      "code": {
+        "repositoryUrl": "https://github.com/speechbrain/speechbrain",
+        "trainingRevision": "fc2eabb7416b0ae68b3baaadb39972ea1d153985",
+        "trainingRevisionUrl": "https://github.com/speechbrain/speechbrain/commit/fc2eabb7416b0ae68b3baaadb39972ea1d153985",
+        "license": "Apache-2.0",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/speechbrain/speechbrain/fc2eabb7/LICENSE",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "SepFormer WHAMR 16 kHz model repository",
+          "url": "https://huggingface.co/speechbrain/sepformer-whamr16k/tree/21a5b500c6f52fddc387c5d9e5fb13ffd6f039c5",
+          "revision": "21a5b500c6f52fddc387c5d9e5fb13ffd6f039c5",
+          "license": "Apache-2.0",
+          "licenseStatus": "VERIFIED_MODEL_CARD_AND_HF_METADATA",
+          "downloaded": false,
+          "inferencePayload": {
+            "masknet.ckptBytes": 113112646,
+            "encoder.ckptBytes": 17272,
+            "decoder.ckptBytes": 17272,
+            "inferencePayloadBytes": 113147190,
+            "optimizer.ckptBytesNotRequiredForInference": 205694713,
+            "masknetLfsSha256": "e5fb8c690668e5d1bbbc9a8256974577093a09cd08e845e9f30024fdd33472ce",
+            "encoderLfsSha256": "31d23d395a408b887b8f6ac01e477f00bcba27f95785426359fb52d52f1dc6ed",
+            "decoderLfsSha256": "2d959cb46de5b15f008bf5476cf7c19bc680b310c7e10883e3eddfdbde533cb8"
+          }
+        }
+      ],
+      "runtime": {
+        "officialPath": "SpeechBrain SepformerSeparation.from_hparams(source=\"speechbrain/sepformer-whamr16k\")",
+        "inputSampleRateHz": 16000,
+        "inputChannels": 1,
+        "dependencies": ["speechbrain", "torch", "torchaudio"],
+        "execution": "PyTorch CPU or CUDA; official card documents optional CUDA device selection.",
+        "browserStatus": "NO_OFFICIAL_BROWSER_PATH",
+        "functionalScope": "Two-source speech separation trained on WHAMR environmental-noise/reverberation mixtures; best legal fit for a local speech-preserving fallback, but dishes overlap quality and timing remain unmeasured."
+      },
+      "localEvidencePaths": []
+    },
+    {
+      "id": "rnnoise",
+      "role": "Speech enhancement only",
+      "safe_to_use": false,
+      "safe_to_use_scope": "BSD-3-Clause source is reusable; the official external model archive has no explicit model license in the inspected repository/docs.",
+      "verdict": "BLOCKED_UNKNOWN_MODEL_LICENSE",
+      "code": {
+        "repositoryUrl": "https://github.com/xiph/rnnoise",
+        "revision": "70f1d256acd4b34a572f999a05c87bf00b67730d",
+        "revisionUrl": "https://github.com/xiph/rnnoise/commit/70f1d256acd4b34a572f999a05c87bf00b67730d",
+        "license": "BSD-3-Clause",
+        "licenseEvidenceUrl": "https://raw.githubusercontent.com/xiph/rnnoise/70f1d256acd4b34a572f999a05c87bf00b67730d/COPYING",
+        "licenseStatus": "VERIFIED"
+      },
+      "modelArtifacts": [
+        {
+          "name": "Official RNNoise model archive",
+          "url": "https://media.xiph.org/rnnoise/models/rnnoise_data-0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37.tar.gz",
+          "revision": "model_version 0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37",
+          "observedBytes": 58603099,
+          "sha256": "0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37",
+          "sha256Source": "Pinned official model_version and download_model.sh; archive body was not downloaded for independent hashing.",
+          "license": null,
+          "licenseStatus": "UNKNOWN",
+          "downloaded": false
+        }
+      ],
+      "runtime": {
+        "officialPath": "Native C library; WASM would require a separate verified build and model packaging path.",
+        "inputSampleRateHz": 48000,
+        "frameSamples": 480,
+        "frameHopMs": 10,
+        "analysisWindowMs": 20,
+        "browserStatus": "NO_OFFICIAL_BROWSER_PATH",
+        "functionalScope": "Noise suppression/speech enhancement with VAD/gain outputs; not semantic separation, not a trigger classifier, and not proof that selected dishes alone are attenuated."
+      },
+      "localEvidencePaths": [
+        "third_party/audioshield_components/rnnoise/SOURCE.json",
+        "third_party/audioshield_components/rnnoise/USEFUL_COMPONENTS.md",
+        "third_party/audioshield_components/rnnoise/LICENSE"
+      ]
+    }
+  ],
+  "researchOnlyBlockers": [
+    "No candidate was downloaded or run, so no output WAV, inference timing, memory measurement, selective attenuation metric, or speech-preservation metric exists.",
+    "No candidate has an official ONNX Runtime Web/WebGPU/WASM execution path verified in this lane.",
+    "YAMNet, Waveformer, RNNoise, and AudioSep-hive remain blocked for redistribution/use at the weight scope until explicit artifact terms are supplied or independently verified.",
+    "The legally cleared SepFormer candidates are offline PyTorch speech-separation models; they still require a separately authorized implementation/integration lane and direct overlap/browser proof."
+  ],
+  "nextAuthorizedLane": "Use SepFormer WHAMR16k as the first legally cleared local fallback candidate, but do not claim it works until a worker produces measured speech+dishes outputs and runtime evidence."
+}

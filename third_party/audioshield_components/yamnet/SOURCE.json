@@ -1,0 +1,103 @@
+{
+  "repository": "https://github.com/tensorflow/models",
+  "owner": "tensorflow",
+  "name": "models",
+  "default_branch": "master",
+  "commit": "dd3514a41bc2fbafb2d15b58ba36ef20933866d4",
+  "clone_timestamp_utc": "2026-08-16T14:53:02Z",
+  "license": "Apache-2.0",
+  "license_verified": true,
+  "license_file": "LICENSE",
+  "license_scope": "The repository root LICENSE explicitly applies Apache-2.0 to all files under /research; copied files that carry upstream headers retain them, while the repository-level license governs files without a local header.",
+  "repo_status": "PRIMARY",
+  "model_weights": [
+    {
+      "name": "YAMNet Keras HDF5 weights",
+      "source": "https://storage.googleapis.com/audioset/yamnet.h5",
+      "license": "UNKNOWN",
+      "status": "BLOCKED_UNKNOWN",
+      "notes": "The upstream YAMNet README links this binary but does not state a license for it. The repository Apache-2.0 code license is not assumed to cover this separately hosted artifact. Not copied."
+    },
+    {
+      "name": "YAMNet TensorFlow Hub SavedModel variables",
+      "source": "https://tfhub.dev/google/yamnet/1?tf-hub-format=compressed",
+      "license": "UNKNOWN",
+      "status": "BLOCKED_UNKNOWN",
+      "notes": "The downloadable archive contains SavedModel variables and a class map but no LICENSE or NOTICE artifact establishing a weight license. Not copied."
+    }
+  ],
+  "useful_files": [
+    {
+      "upstream_path": "research/audioset/yamnet/README.md",
+      "local_path": "extracted/research/audioset/yamnet/README.md",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Records YAMNet's detector contract, preprocessing dimensions, model size, class vocabulary, and export prerequisites.",
+      "audioShield_target": "Future detector implementation notes; do not copy into production as runtime code.",
+      "source_sha256": "e837352cc8747b257c36e99f23bf02e136761c6b51f59a577fef786dfd95fd16"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/yamnet.py",
+      "local_path": "extracted/research/audioset/yamnet/yamnet.py",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Keras model definition producing per-patch class scores and 1024-dimensional embeddings.",
+      "audioShield_target": "Future detector adapter or offline conversion tooling; TensorFlow/Keras dependency must be removed or isolated for browser use.",
+      "source_sha256": "7ef3df32b7ecb782490b5a04d7581a23cfcf701dbf476bc4d03deefe22cdb040"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/features.py",
+      "local_path": "extracted/research/audioset/yamnet/features.py",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Defines waveform padding, STFT, mel projection, stabilized log features, and a TFLite-compatible STFT path.",
+      "audioShield_target": "Future browser detector preprocessing adapter; reimplement or validate numerically in JavaScript/WebAudio-compatible code.",
+      "source_sha256": "e6cd53f81d072c7c43be4c7fff2b9dd0c5ccc7d64f2fbcfc85b44013d6d2ed5e"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/params.py",
+      "local_path": "extracted/research/audioset/yamnet/params.py",
+      "classification": "DIRECT_USE",
+      "license": "Apache-2.0",
+      "purpose": "Authoritative detector constants: 16 kHz input, 25 ms window, 10 ms hop, 64 mel bands, 0.96 s patches, and 0.48 s patch hop.",
+      "audioShield_target": "Future detector adapter specification; Python dataclass itself is not browser runtime code.",
+      "source_sha256": "925bb1e62461016031f98aea09aeac28975dd516f5747513767de5d1b06b6145"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/inference.py",
+      "local_path": "extracted/research/audioset/yamnet/inference.py",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Reference inference flow for float normalization, stereo-to-mono conversion, resampling, per-frame scores, and top-class aggregation.",
+      "audioShield_target": "Future detector adapter contract and offline validation harness; soundfile/resampy/TensorFlow must not be shipped to the extension.",
+      "source_sha256": "eefbb3c2f3df13e5d2483d7e0f19f24b046915637ebaa102bad469752f6a42bd"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/export.py",
+      "local_path": "extracted/research/audioset/yamnet/export.py",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Reference TF2, TFLite, and TFJS export pipeline with a waveform input signature and class-map asset.",
+      "audioShield_target": "Offline model conversion tooling; do not run as part of MV3 playback. Export output still requires independent weight licensing and browser smoke tests.",
+      "source_sha256": "7c7ae8b6694fc8dadd387013981388d848aac1de9a71231a73f3e790547f9389"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/yamnet_class_map.csv",
+      "local_path": "extracted/research/audioset/yamnet/yamnet_class_map.csv",
+      "classification": "DIRECT_USE",
+      "license": "Apache-2.0",
+      "purpose": "Maps all 521 output indices to AudioSet MIDs and display names used by detector rules.",
+      "audioShield_target": "Future detector class mapping; preserve index order and attribution.",
+      "source_sha256": "cdf24d193e196d9e95912a2667051ae203e92a2ba09449218ccb40ef787c6df2"
+    },
+    {
+      "upstream_path": "research/audioset/yamnet/yamnet_test.py",
+      "local_path": "extracted/research/audioset/yamnet/yamnet_test.py",
+      "classification": "ADAPT",
+      "license": "Apache-2.0",
+      "purpose": "Upstream sanity checks for silence, white noise, and sine wave predictions.",
+      "audioShield_target": "Future offline detector regression fixture; requires a licensed weight artifact and a browser-side parity test before use.",
+      "source_sha256": "29a623a7504703aaf67d84a92d249201f254100302705e49b5ef08c906c6242a"
+    }
+  ]
+}

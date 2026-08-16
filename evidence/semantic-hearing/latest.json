@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-08-16T15:19:51.676Z",
+  "status": "RED",
+  "verdict": "OFFLINE_REFERENCE",
+  "lane": "Semantic Hearing separator",
+  "repo": {
+    "head": "353b4105e30de9079fba8ce65acb1c7c848622d8",
+    "workingTree": "dirty_before_lane_artifacts"
+  },
+  "intake": {
+    "componentId": "semantic_hearing",
+    "upstream": "https://github.com/vb000/SemanticHearing",
+    "exactHeadSha": "07e9786c7a741f0a7c722dcde66a2679ca068c50",
+    "repositoryLicense": {
+      "spdx": "MIT",
+      "status": "VERIFIED",
+      "source_path": "LICENSE",
+      "copyright": "Copyright (c) 2022 Bandhav Veluri",
+      "attribution_required": true,
+      "attribution_action": "Retain the MIT notice in this folder and preserve it with any distributed substantial copy."
+    },
+    "checkpoint": {
+      "artifact": "39.pt",
+      "type": "PyTorch checkpoint",
+      "url": "https://semantichearing.cs.washington.edu/39.pt",
+      "repository_reference": "README.md:26",
+      "observed_content_length_bytes": 22175577,
+      "license_status": "BLOCKED_UNKNOWN",
+      "license": null,
+      "verification": "The GitHub repository license is MIT, but neither README.md nor the hosted artifact response provides an explicit license covering this checkpoint.",
+      "downloaded": false,
+      "action": "Do not download, vendor, redistribute, or use for an AudioShield release until the checkpoint owner supplies explicit terms."
+    }
+  },
+  "modelContract": {
+    "sampleRateHz": 44100,
+    "channels": 2,
+    "labelCount": 20,
+    "modelParams": {
+      "L": 32,
+      "label_len": 20,
+      "model_dim": 256,
+      "num_enc_layers": 10,
+      "num_dec_layers": 1,
+      "dec_buf_len": 13,
+      "dec_chunk_size": 13,
+      "use_pos_enc": true,
+      "conditioning": "mult",
+      "out_buf_len": 4
+    },
+    "trainingDataset": "data/BinauralCuratedDataset/scaper_fmt/train",
+    "browserInput": "UNVERIFIED"
+  },
+  "fixture": {
+    "id": "semantic-hearing-speech-dishes-v1",
+    "seed": 7331,
+    "sampleRateHz": 44100,
+    "durationSeconds": 1,
+    "channels": 2,
+    "speechDescription": "deterministic voiced harmonic stem with syllabic envelope",
+    "dishesDescription": "deterministic high-frequency transient clatter stem",
+    "mixture": "speech + dishes, channel-aligned sum",
+    "files": {
+      "speech": {
+        "path": "speech.wav",
+        "bytes": 176444,
+        "sha256": "7434d3c85e5865970a6a689ba88d7070e3de9a9f6ac7541775305ee6a23f535d"
+      },
+      "dishes": {
+        "path": "dishes.wav",
+        "bytes": 176444,
+        "sha256": "d86d3b11dbbe0425048265ee6cf81864916e9278beedfdd864686e76c8e3b68d"
+      },
+      "mixture": {
+        "path": "mixture.wav",
+        "bytes": 176444,
+        "sha256": "57f486b04cf13d7dbb3780c8906ca57af5e53c738d76b9b3b48a95bb1326627b"
+      }
+    },
+    "processedOutputWav": "NOT_PRODUCED"
+  },
+  "environment": {
+    "python": {
+      "python": "3.13.2",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "modules": {
+        "torch": true,
+        "torchaudio": false,
+        "speechbrain": false,
+        "torchmetrics": false,
+        "scaper": false,
+        "sofa": false,
+        "onnx": false,
+        "onnxruntime": true
+      },
+      "versions": {
+        "torch": "2.12.1",
+        "onnxruntime": "1.27.0"
+      },
+      "sourceFileCount": 3,
+      "syntaxErrors": []
+    },
+    "onnxRuntimeWebInstalled": false,
+    "networkAccessed": false
+  },
+  "feasibility": {
+    "sourceSyntax": "PASS",
+    "originalUpstreamModel": {
+      "status": "BLOCKED_NOT_RUN",
+      "reasons": [
+        "license-cleared Semantic Hearing checkpoint is absent; intake marks 39.pt BLOCKED_UNKNOWN and forbids download",
+        "required original-model dependency is absent: torchaudio",
+        "required original-model dependency is absent: speechbrain",
+        "required original-model dependency is absent: torchmetrics"
+      ],
+      "outputWav": "NOT_PRODUCED",
+      "qualityMetrics": "NOT_MEASURED"
+    },
+    "onnxExport": {
+      "status": "BLOCKED_NOT_RUN",
+      "reasons": [
+        "license-cleared Semantic Hearing checkpoint is absent; intake marks 39.pt BLOCKED_UNKNOWN and forbids download",
+        "required original-model dependency is absent: torchaudio",
+        "required original-model dependency is absent: speechbrain",
+        "required original-model dependency is absent: torchmetrics",
+        "Python onnx exporter is absent"
+      ],
+      "unsupportedOperators": "NOT_INSPECTED_WITHOUT_EXPORT"
+    },
+    "onnxRuntimeWeb": {
+      "status": "NOT_RUN",
+      "reasons": [
+        "onnxruntime-web is not installed",
+        "no exported ONNX model is available"
+      ],
+      "webgpu": "NOT_RUN",
+      "wasm": "NOT_RUN",
+      "modelSizeBytes": null,
+      "initMs": null,
+      "p50InferenceMs": null,
+      "p95InferenceMs": null
+    },
+    "overlapMetrics": {
+      "targetAttenuationDb": "NOT_MEASURED",
+      "speechPreservationDb": "NOT_MEASURED",
+      "globalDuckBaselineDb": "NOT_APPLICABLE_TO_THIS_LANE"
+    }
+  },
+  "blockers": [
+    "BLOCKED_UNKNOWN checkpoint licensing prevents download, use, or redistribution of 39.pt.",
+    "Missing original/export dependency: torchaudio.",
+    "Missing original/export dependency: speechbrain.",
+    "Missing original/export dependency: torchmetrics.",
+    "The intake source is trained for binaural environmental recordings; browser stereo/mono preprocessing compatibility is unverified.",
+    "The canonical Semantic Hearing labels do not contain dishes or clatter, so the requested target has no evidence-backed conditioning label.",
+    "No ONNX export or ONNX Runtime Web execution can be measured without a cleared checkpoint and exporter/runtime graph."
+  ],
+  "productionWiring": "UNCHANGED"
+}

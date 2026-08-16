@@ -3,8 +3,12 @@ import { createAudioRuntime } from "./runtime";
 const runtime = createAudioRuntime((constraints) => navigator.mediaDevices.getUserMedia(constraints));
 
 runtime.onStatus((status) => chrome.runtime.sendMessage({ type: "ENGINE_STATUS", status }));
-chrome.runtime.onMessage.addListener((message: { type: string; streamId?: string }) => {
+chrome.runtime.onMessage.addListener((message: { type: string; streamId?: string; rules?: { id: string; enabled: boolean; strength: number }[]; masterStrength?: number }) => {
   if (message.type === "OFFSCREEN_START" && message.streamId) void runtime.start(message.streamId);
   if (message.type === "OFFSCREEN_STOP") void runtime.stop();
   if (message.type === "BYPASS_SET") void runtime.setBypass(Boolean((message as { enabled?: boolean }).enabled));
+  if (message.type === "PROTECTION_RULES_UPDATE") {
+    const alarm = message.rules?.find((rule) => rule.id === "alarm-siren");
+    runtime.setRules(Boolean(alarm?.enabled), Math.min(alarm?.strength ?? 78, message.masterStrength ?? 100));
+  }
 });

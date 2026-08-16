@@ -1,0 +1,9 @@
+{
+  "generated_for": "AudioShield open-source component intake",
+  "production_code_modified": false,
+  "repository_count": 8,
+  "repositories": "See each component/SOURCE.json for exact URL, pinned commit, license evidence, copied-file hashes, and weight status.",
+  "temporary_clone_root": "/tmp/audioshield-oss-scan/",
+  "verification": ["exact upstream commit", "repository license", "curated file provenance", "separate model-weight license"],
+  "unknowns_are_blocked": true
+}
