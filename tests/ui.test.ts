@@ -7,6 +7,7 @@ describe("popup UI contracts", () => {
     expect(Object.keys(labels)).toEqual([
       "background-noise",
       "alarm-siren",
+      "glass-shatter",
       "dishes-clatter",
       "applause",
       "harsh-highs",

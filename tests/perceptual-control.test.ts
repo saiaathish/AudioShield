@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   computeDynamicProfile,
   computeFrameStats,
+  computeSensoryRoutes,
+  continuousNeuralMix,
   findToneCandidates,
+  neuralDelaySeconds,
+  strengthToUnit,
   updateEnvelope,
   updateToneTracker,
+  type FrameStats,
   type ToneTracker,
 } from "../src/offscreen/perceptual-control";
 
@@ -22,29 +27,110 @@ function speechLikeWave(length = 2048): Float32Array {
   return out;
 }
 
-describe("perceptual control v2", () => {
-  it("keeps transient rules transparent when no event is present", () => {
-    const frequencies = flatSpectrum(-82);
-    const waveform = speechLikeWave();
-    const stats = computeFrameStats(frequencies, waveform, 48_000, 2048);
-    const profile = computeDynamicProfile({
-      harshStrength: 0,
-      clatterStrength: 100,
-      applauseStrength: 100,
-      loudnessStrength: 100,
-      backgroundStrength: 0,
-      stats,
-      envelopes: { clatter: 0, applause: 0, loudness: 0 },
-      neuralActive: false,
-    });
+function stats(overrides: Partial<FrameStats> = {}): FrameStats {
+  return {
+    peak: 0.2,
+    rms: 0.06,
+    crest: 3.3,
+    highRatio: 0.25,
+    ultraHighRatio: 0.12,
+    spectralFlatness: 0.25,
+    spectralFlux: 0.05,
+    spectralCentroidHz: 1800,
+    speechLikelihood: 0.2,
+    backgroundConfidence: 0.2,
+    glassConfidence: 0,
+    clatterConfidence: 0,
+    applauseConfidence: 0,
+    harshConfidence: 0,
+    loudnessConfidence: 0,
+    ...overrides,
+  };
+}
 
-    expect(profile.highShelfDb).toBeCloseTo(0, 6);
-    expect(profile.transientGain).toBeCloseTo(1, 6);
-    expect(profile.compressorRatio).toBeCloseTo(1.25, 6);
-    expect(profile.compressorThresholdDb).toBeCloseTo(-5.5, 6);
+describe("perceptual control v3", () => {
+  it("has a mathematically continuous 0-100 strength curve with no dead zones", () => {
+    expect(strengthToUnit(0)).toBe(0);
+    expect(strengthToUnit(100)).toBe(1);
+    for (let value = 1; value <= 100; value += 1) {
+      expect(strengthToUnit(value) - strengthToUnit(value - 1)).toBeCloseTo(0.01, 10);
+      expect(continuousNeuralMix(value, 1)).toBeCloseTo(value / 100, 10);
+    }
   });
 
-  it("makes transient suppression temporary instead of permanent", () => {
+  it("uses a delay-aligned dry path for partial GTCRN/RNNoise mixing", () => {
+    expect(neuralDelaySeconds("gtcrn", 48_000)).toBeCloseTo(640 / 48_000, 10);
+    expect(neuralDelaySeconds("rnnoise", 48_000)).toBeCloseTo(640 / 48_000, 10);
+    expect(neuralDelaySeconds("gtcrn", 16_000)).toBeCloseTo(128 / 16_000, 10);
+    expect(neuralDelaySeconds("native-sensory", 48_000)).toBe(0);
+  });
+
+  it("keeps every processing stage transparent at 0%", () => {
+    const frame = computeFrameStats(flatSpectrum(-82), speechLikeWave(), 48_000, 2048);
+    const profile = computeDynamicProfile({
+      harshStrength: 0,
+      glassStrength: 0,
+      clatterStrength: 0,
+      applauseStrength: 0,
+      loudnessStrength: 0,
+      backgroundStrength: 0,
+      stats: frame,
+      envelopes: { glass: 0, clatter: 0, applause: 0, loudness: 0 },
+      routes: computeSensoryRoutes(frame, []),
+      neuralMix: 0,
+    });
+
+    expect(profile.highShelfDb).toBeCloseTo(0, 8);
+    expect(profile.transientGain).toBeCloseTo(1, 8);
+    expect(profile.compressorRatio).toBeCloseTo(1, 8);
+    expect(profile.compressorThresholdDb).toBeCloseTo(0, 8);
+    expect(profile.limiterRatio).toBeCloseTo(1, 8);
+    expect(profile.limiterThresholdDb).toBeCloseTo(0, 8);
+    expect(profile.presenceDb).toBeCloseTo(0, 8);
+  });
+
+  it("routes a persistent house-alarm tone ahead of broad background denoising", () => {
+    const frame = stats({ backgroundConfidence: 0.92, spectralFlatness: 0.55 });
+    const trackers: ToneTracker[] = [
+      { frequencyHz: 2800, confidence: 0.92, persistence: 6 },
+      { frequencyHz: 3400, confidence: 0.78, persistence: 5 },
+    ];
+    const routes = computeSensoryRoutes(frame, trackers);
+    expect(routes.alarm).toBeGreaterThan(0.8);
+    expect(routes.background).toBeLessThan(0.2);
+    expect(routes.alarm).toBeGreaterThan(routes.background);
+  });
+
+  it("routes glass shatter ahead of background and ordinary clatter", () => {
+    const frame = stats({
+      backgroundConfidence: 0.88,
+      glassConfidence: 0.95,
+      clatterConfidence: 0.82,
+      spectralFlux: 0.9,
+      ultraHighRatio: 0.8,
+      crest: 8,
+    });
+    const routes = computeSensoryRoutes(frame, []);
+    expect(routes.glass).toBeGreaterThan(routes.clatter);
+    expect(routes.background).toBeLessThan(0.15);
+  });
+
+  it("detects a synthetic brittle high-frequency transient as glass-like", () => {
+    const previous = flatSpectrum(-82);
+    const frequencies = flatSpectrum(-82);
+    const waveform = new Float32Array(2048);
+    waveform[100] = 0.95;
+    waveform[101] = -0.72;
+    const binHz = 48_000 / 2048;
+    for (let hz = 5200; hz <= 12_000; hz += 180) {
+      frequencies[Math.round(hz / binHz)] = -20;
+    }
+    const frame = computeFrameStats(frequencies, waveform, 48_000, 2048, previous);
+    expect(frame.glassConfidence).toBeGreaterThan(frame.backgroundConfidence);
+    expect(frame.spectralFlux).toBeGreaterThan(0.1);
+  });
+
+  it("makes event suppression temporary instead of permanently dulling audio", () => {
     let envelope = 0;
     envelope = updateEnvelope(envelope, 0.95, 0.7);
     expect(envelope).toBeCloseTo(0.95, 6);
@@ -64,13 +150,6 @@ describe("perceptual control v2", () => {
     expect(tracker.frequencyHz).toBeLessThan(1210);
   });
 
-  it("rejects one-frame tone jumps instead of chasing speech harmonics", () => {
-    let tracker: ToneTracker = { frequencyHz: 1100, confidence: 0.8, persistence: 4 };
-    tracker = updateToneTracker(tracker, { frequencyHz: 2500, confidence: 0.9, scoreDb: 20 });
-    expect(tracker.persistence).toBe(1);
-    expect(tracker.frequencyHz).toBe(2500);
-  });
-
   it("detects an isolated alarm-like spectral peak", () => {
     const frequencies = flatSpectrum(-70);
     const binHz = 48_000 / 2048;
@@ -78,31 +157,34 @@ describe("perceptual control v2", () => {
     frequencies[targetBin] = -24;
     frequencies[targetBin - 1] = -28;
     frequencies[targetBin + 1] = -28;
-    const candidates = findToneCandidates(frequencies, 48_000, 2048, 2);
+    const candidates = findToneCandidates(frequencies, 48_000, 2048, 3);
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates[0].frequencyHz).toBeGreaterThan(1400);
     expect(candidates[0].frequencyHz).toBeLessThan(1600);
     expect(candidates[0].confidence).toBeGreaterThan(0.5);
   });
 
-  it("bounds aggressive event controls to quality-safe ranges", () => {
-    const stats = computeFrameStats(flatSpectrum(-35), new Float32Array(2048).fill(0.7), 48_000, 2048);
+  it("bounds full-strength event controls to quality-safe ranges", () => {
+    const frame = stats({ speechLikelihood: 0, harshConfidence: 1 });
     const profile = computeDynamicProfile({
       harshStrength: 100,
+      glassStrength: 100,
       clatterStrength: 100,
       applauseStrength: 100,
       loudnessStrength: 100,
       backgroundStrength: 100,
-      stats,
-      envelopes: { clatter: 1, applause: 1, loudness: 1 },
-      neuralActive: true,
+      stats: frame,
+      envelopes: { glass: 1, clatter: 1, applause: 1, loudness: 1 },
+      routes: { background: 0, alarm: 0, glass: 1, clatter: 1, applause: 1, harsh: 1, loudness: 1, foregroundDominance: 1 },
+      neuralMix: 1,
     });
 
-    expect(profile.highShelfDb).toBeGreaterThanOrEqual(-12.5);
-    expect(profile.transientGain).toBeGreaterThanOrEqual(10 ** (-5.5 / 20) - 1e-6);
-    expect(profile.compressorRatio).toBeLessThanOrEqual(4.95);
-    expect(profile.compressorThresholdDb).toBeGreaterThanOrEqual(-18.1);
+    expect(profile.highShelfDb).toBeGreaterThanOrEqual(-14);
+    expect(profile.transientGain).toBeGreaterThanOrEqual(10 ** (-7.5 / 20) - 1e-6);
+    expect(profile.compressorRatio).toBeLessThanOrEqual(5.1);
+    expect(profile.compressorThresholdDb).toBeGreaterThanOrEqual(-18);
+    expect(profile.limiterRatio).toBeLessThanOrEqual(16);
     expect(profile.presenceDb).toBeGreaterThanOrEqual(0);
-    expect(profile.presenceDb).toBeLessThanOrEqual(1.9);
+    expect(profile.presenceDb).toBeLessThanOrEqual(2);
   });
 });

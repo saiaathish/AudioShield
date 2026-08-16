@@ -9,6 +9,7 @@ describe("shared contracts", () => {
     expect(P0_TRIGGER_IDS).toEqual([
       "background-noise",
       "alarm-siren",
+      "glass-shatter",
       "dishes-clatter",
       "applause",
       "harsh-highs",
