@@ -7,30 +7,38 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Upgrade vulnerable dev toolchain for verification
+      - name: Upgrade vulnerable dev toolchain
         run: npm install --save-dev esbuild@^0.28.2 vitest@^4.1.10
+      - name: Persist generated dependency manifests
+        if: github.event_name == 'pull_request' && github.head_ref == 'audit/dependencies'
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Dependency manifests already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "fix: upgrade vulnerable dev toolchain"
+          git push origin HEAD:${GITHUB_HEAD_REF}
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
-      - name: Capture npm audit
-        shell: bash
-        run: npm audit --json > npm-audit.json || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dependency-upgrade
-          path: |
-            package.json
-            package-lock.json
-            npm-audit.json
-          if-no-files-found: error
+      - run: npm audit --audit-level=moderate
