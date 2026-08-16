@@ -25,3 +25,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --audit-level=moderate
+      - name: Upload verified unpacked extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: audioshield-unpacked-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
