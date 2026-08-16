@@ -2,13 +2,15 @@ import type { SensoryEvent } from "../shared/events/types";
 import type { TriggerId, TriggerRule } from "../shared/settings/types";
 import {
   clamp,
+  composeProtectionStrength,
   computeDynamicProfile,
   computeFrameStats,
   computeSensoryRoutes,
   continuousNeuralMix,
   findToneCandidates,
   neuralDelaySeconds,
-  strengthToUnit,
+  perceptualDrive,
+  routeDrive,
   updateEnvelope,
   updateToneTracker,
   type EventEnvelopes,
@@ -71,17 +73,12 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield v3: competitive event routing.
+ * AudioShield v5: decisive routing on the last listening-tested Chrome graph.
  *
- * The neural denoiser is no longer allowed to claim every suppressible sound as
- * "background noise". A temporal router classifies foreground structure first:
- * persistent tones -> alarms, high-flux/ultra-high transients -> glass,
- * broadband impacts -> clatter, dense bursts -> applause/loudness. Foreground
- * confidence pre-empts the background route, then each dedicated control acts.
- *
- * Protection strength is linear from 0-100. The neural dry path is delayed to
- * match the packaged GTCRN/RNNoise worklets, allowing continuous dry/wet
- * blending without the comb filtering that an unaligned parallel path creates.
+ * Keep the proven 2048/70ms analysis path and no extra lookahead node. The fix
+ * here is control authority: master/profile composition, route evidence, event
+ * envelopes, and speech guards no longer multiply medium-confidence events into
+ * a near-no-op. Every 0-100 input remains continuous.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -132,15 +129,14 @@ export async function createSensoryGraph(
   for (const tone of [toneA, toneB, toneC]) {
     tone.type = "peaking";
     tone.frequency.value = 1200;
-    tone.Q.value = 12;
+    tone.Q.value = 8;
     tone.gain.value = 0;
   }
 
-  // Exact 0% must be transparent. Dynamics increase continuously from here.
   compressor.threshold.value = 0;
   compressor.knee.value = 8;
   compressor.ratio.value = 1;
-  compressor.attack.value = 0.010;
+  compressor.attack.value = 0.006;
   compressor.release.value = 0.095;
 
   limiter.threshold.value = 0;
@@ -149,19 +145,17 @@ export async function createSensoryGraph(
   limiter.attack.value = 0.0015;
   limiter.release.value = 0.06;
 
+  // Preserve the last real-Chrome cadence. Do not reintroduce the failed
+  // lookahead experiment without a listening test.
   analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.52;
+  analyser.smoothingTimeConstant = 0.42;
   analyser.minDecibels = -100;
   analyser.maxDecibels = -8;
 
-  // Bypass uses the same alignment delay as the protected path so toggling it
-  // does not create a short echo/flange against a latency-bearing neural path.
   source.connect(bypassDelay);
   bypassDelay.connect(bypassGain);
   bypassGain.connect(context.destination);
 
-  // Delay-aligned dry + neural wet branches give every slider percentage a
-  // real, continuous amount of neural influence rather than an on/off knee.
   source.connect(neuralDryDelay);
   neuralDryDelay.connect(neuralDryGain);
   neuralDryGain.connect(merge);
@@ -218,16 +212,16 @@ export async function createSensoryGraph(
   const effective = (id: TriggerId) => {
     const rule = getRule(id);
     if (!rule?.enabled) return 0;
-    return clamp(rule.strength, 0, 100) * clamp(masterStrength, 0, 100) / 100;
+    return composeProtectionStrength(rule.strength, masterStrength);
   };
 
-  const maybeEmit = (id: TriggerId, confidence: number, attenuationDb?: number, dominantFrequencyHz?: number) => {
+  const maybeEmit = (id: TriggerId, routingScore: number, attenuationDb?: number, dominantFrequencyHz?: number) => {
     const now = Date.now();
-    if (now - (lastEventAt.get(id) ?? 0) < 420) return;
+    if (now - (lastEventAt.get(id) ?? 0) < 320) return;
     lastEventAt.set(id, now);
     emitEvent({
       triggerId: id,
-      confidence: clamp(confidence),
+      confidence: clamp(routingScore),
       timestamp: now,
       tabId,
       attenuationDb,
@@ -239,12 +233,12 @@ export async function createSensoryGraph(
   const applyNeuralRouting = () => {
     if (!neural) {
       currentNeuralMix = 0;
-      setParam(neuralDryGain.gain, 1, context, 0.02);
+      setParam(neuralDryGain.gain, 1, context, 0.016);
       return;
     }
     currentNeuralMix = continuousNeuralMix(effective("background-noise"), lastRoutes.background);
-    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.024);
-    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.024);
+    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.018);
+    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.018);
   };
 
   const applyDynamicProfile = (stats: FrameStats) => {
@@ -261,15 +255,15 @@ export async function createSensoryGraph(
       neuralMix: currentNeuralMix,
     });
 
-    setParam(presence.gain, profile.presenceDb, context, 0.055);
-    setParam(harshShelf.gain, profile.highShelfDb, context, 0.038);
-    setParam(transientGain.gain, profile.transientGain, context, 0.014);
-    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.028);
-    setParam(compressor.ratio, profile.compressorRatio, context, 0.028);
-    setParam(compressor.attack, profile.compressorAttack, context, 0.028);
-    setParam(compressor.release, profile.compressorRelease, context, 0.045);
-    setParam(limiter.threshold, profile.limiterThresholdDb, context, 0.03);
-    setParam(limiter.ratio, profile.limiterRatio, context, 0.03);
+    setParam(presence.gain, profile.presenceDb, context, 0.040);
+    setParam(harshShelf.gain, profile.highShelfDb, context, 0.020);
+    setParam(transientGain.gain, profile.transientGain, context, 0.010);
+    setParam(compressor.threshold, profile.compressorThresholdDb, context, 0.016);
+    setParam(compressor.ratio, profile.compressorRatio, context, 0.016);
+    setParam(compressor.attack, profile.compressorAttack, context, 0.012);
+    setParam(compressor.release, profile.compressorRelease, context, 0.030);
+    setParam(limiter.threshold, profile.limiterThresholdDb, context, 0.018);
+    setParam(limiter.ratio, profile.limiterRatio, context, 0.018);
   };
 
   const applyRules = () => {
@@ -307,54 +301,53 @@ export async function createSensoryGraph(
     const loudnessStrength = effective("sudden-loudness");
 
     envelopes = {
-      glass: updateEnvelope(envelopes.glass, glassStrength > 0 ? lastRoutes.glass : 0, 0.48),
-      clatter: updateEnvelope(envelopes.clatter, clatterStrength > 0 ? lastRoutes.clatter : 0, 0.67),
+      glass: updateEnvelope(envelopes.glass, glassStrength > 0 ? lastRoutes.glass : 0, 0.52),
+      clatter: updateEnvelope(envelopes.clatter, clatterStrength > 0 ? lastRoutes.clatter : 0, 0.66),
       applause: updateEnvelope(envelopes.applause, applauseStrength > 0 ? lastRoutes.applause : 0, 0.84),
       loudness: updateEnvelope(envelopes.loudness, loudnessStrength > 0 ? lastRoutes.loudness : 0, 0.70),
     };
 
-    // Foreground routing is decided before the broad neural mix is updated.
-    // Alarm/glass confidence therefore immediately pushes background denoising
-    // out of the way and lets the dedicated event controls own the attenuation.
+    // Foreground routes now take audible ownership. Background neural mixing
+    // backs off before category-specific controls are applied.
     applyNeuralRouting();
 
-    if (effective("background-noise") > 0 && currentNeuralMix > 0.01 && lastRoutes.background >= 0.24) {
+    if (effective("background-noise") > 0 && currentNeuralMix > 0.01 && lastRoutes.background >= 0.14) {
       maybeEmit("background-noise", lastRoutes.background);
     }
-    if (glassStrength > 0 && lastRoutes.glass >= 0.18) {
-      maybeEmit("glass-shatter", lastRoutes.glass, -7.5 * envelopes.glass * strengthToUnit(glassStrength));
+    if (glassStrength > 0 && lastRoutes.glass >= 0.10) {
+      maybeEmit("glass-shatter", lastRoutes.glass, -13 * envelopes.glass * perceptualDrive(glassStrength));
     }
-    if (clatterStrength > 0 && lastRoutes.clatter >= 0.20) {
-      maybeEmit("dishes-clatter", lastRoutes.clatter, -6 * envelopes.clatter * strengthToUnit(clatterStrength));
+    if (clatterStrength > 0 && lastRoutes.clatter >= 0.12) {
+      maybeEmit("dishes-clatter", lastRoutes.clatter, -9 * envelopes.clatter * perceptualDrive(clatterStrength));
     }
-    if (applauseStrength > 0 && lastRoutes.applause >= 0.24) {
-      maybeEmit("applause", lastRoutes.applause, -4.5 * envelopes.applause * strengthToUnit(applauseStrength));
+    if (applauseStrength > 0 && lastRoutes.applause >= 0.16) {
+      maybeEmit("applause", lastRoutes.applause, -6 * envelopes.applause * perceptualDrive(applauseStrength));
     }
-    if (loudnessStrength > 0 && lastRoutes.loudness >= 0.24) {
-      maybeEmit("sudden-loudness", lastRoutes.loudness, -5.5 * envelopes.loudness * strengthToUnit(loudnessStrength));
+    if (loudnessStrength > 0 && lastRoutes.loudness >= 0.14) {
+      maybeEmit("sudden-loudness", lastRoutes.loudness, -9.5 * envelopes.loudness * perceptualDrive(loudnessStrength));
     }
 
     const alarmStrength = effective("alarm-siren");
-    const alarmUnit = strengthToUnit(alarmStrength);
+    const alarmUnit = perceptualDrive(alarmStrength);
     const tones = [toneA, toneB, toneC];
     for (let index = 0; index < tones.length; index += 1) {
       const tracker = toneTrackers[index];
       const tone = tones[index];
-      const stable = tracker.persistence >= 2 && tracker.confidence >= 0.12;
+      const stable = tracker.persistence >= 2 && tracker.confidence >= 0.08;
       if (stable && alarmUnit > 0) {
-        const speechGuard = 1 - stats.speechLikelihood * 0.30;
-        const persistence = clamp((tracker.persistence - 1) / 5);
-        const routeWeight = Math.max(lastRoutes.alarm, tracker.confidence * persistence);
-        // No fixed minimum attenuation: 1% really is ~1/100th of 100%.
-        const attenuation = -20 * alarmUnit * routeWeight * speechGuard;
-        setParam(tone.frequency, tracker.frequencyHz, context, 0.020);
-        setParam(tone.Q, 10 + tracker.confidence * 11, context, 0.025);
-        setParam(tone.gain, attenuation, context, 0.022);
-        if (index === 0 && routeWeight >= 0.14) {
+        const speechGuard = 1 - stats.speechLikelihood * 0.16;
+        const persistence = clamp((tracker.persistence - 1) / 4);
+        const trackerEvidence = tracker.confidence * (0.45 + persistence * 0.55);
+        const routeWeight = Math.max(lastRoutes.alarm, routeDrive(trackerEvidence));
+        const attenuation = -34 * alarmUnit * routeWeight * speechGuard;
+        setParam(tone.frequency, tracker.frequencyHz, context, 0.010);
+        setParam(tone.Q, 6.5 + tracker.confidence * 7.5, context, 0.012);
+        setParam(tone.gain, attenuation, context, 0.010);
+        if (index === 0 && routeWeight >= 0.10) {
           maybeEmit("alarm-siren", routeWeight, attenuation, tracker.frequencyHz);
         }
       } else {
-        setParam(tone.gain, 0, context, 0.042);
+        setParam(tone.gain, 0, context, 0.040);
       }
     }
 
