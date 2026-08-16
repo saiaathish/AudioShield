@@ -72,6 +72,33 @@ export function alarmNotchQ(strength: number, confidence: number): number {
   return 12.5 - drive * 7.2 + clamp(confidence) * 3.5;
 }
 
+/**
+ * Demucs-style remix control for the real-time path.
+ *
+ * GTCRN/RNNoise acts as a foreground/speech estimate. Mixing dry and neural is
+ * algebraically equivalent to remixing two stems:
+ *   foreground + keep * (original - foreground)
+ * where (original - foreground) is the nuisance residual. This lets alarm,
+ * glass and clatter routes directly turn down the nuisance stem instead of only
+ * applying EQ/compression after the fact.
+ *
+ * 0% => exact original branch. 100% + route=1 => neural foreground only.
+ */
+export function stemRouteMix(strength: number, route: number, authority = 1): number {
+  const raw = perceptualDrive(strength) * routeDrive(route);
+  if (raw <= 0) return 0;
+  if (raw >= 1) return 1;
+  return clamp(1 - (1 - raw) ** Math.max(0.25, authority));
+}
+
+/** Alarm keeps a wider low-to-high range while still reaching a true maximum. */
+export function alarmStemMix(strength: number, route: number): number {
+  const raw = alarmStrengthDrive(strength) * routeDrive(route);
+  if (raw <= 0) return 0;
+  if (raw >= 1) return 1;
+  return clamp(1 - (1 - raw) ** 1.3);
+}
+
 async function createNeuralNode(context: AudioContext): Promise<{ node: DestroyableAudioNode; engine: SensoryEngineName } | null> {
   const url = (path: string) => chrome.runtime.getURL(path);
   const suppressor = await import("@sapphi-red/web-noise-suppressor");
@@ -104,12 +131,15 @@ async function createNeuralNode(context: AudioContext): Promise<{ node: Destroya
 }
 
 /**
- * AudioShield v6: decisive routing on the last listening-tested Chrome graph.
+ * AudioShield v7: neural stem remix on the last listening-tested Chrome graph.
  *
- * Keep the proven 2048/70ms analysis path and no extra lookahead node. The core
- * graph stays stable while alarm suppression now has a true 0-100 range: zero is
- * transparent, intermediate values are distinct, and 100 is an emergency-grade
- * targeted cut rather than a modest notch.
+ * Demucs/HTDemucs proves the quality of explicit source remixing, but its browser
+ * model is far too large and segment-oriented for a live extension path. V7 uses
+ * the already-packaged real-time GTCRN/RNNoise foreground estimate as a two-stem
+ * separator: foreground vs nuisance residual. Category routes now control that
+ * residual directly, then the existing targeted filters clean up model leakage.
+ *
+ * The proven 2048/70ms analysis path stays unchanged. 0 remains transparent.
  */
 export async function createSensoryGraph(
   context: AudioContext,
@@ -187,6 +217,8 @@ export async function createSensoryGraph(
   bypassDelay.connect(bypassGain);
   bypassGain.connect(context.destination);
 
+  // Delay-aligned dry and neural branches form the two-stem remix. A mix of 0
+  // reconstructs the original path; a mix of 1 leaves only the neural foreground.
   source.connect(neuralDryDelay);
   neuralDryDelay.connect(neuralDryGain);
   neuralDryGain.connect(merge);
@@ -216,6 +248,7 @@ export async function createSensoryGraph(
   let rules: readonly TriggerRule[] = [];
   let lastStats: FrameStats | undefined;
   let currentNeuralMix = 0;
+  let currentBackgroundMix = 0;
   let envelopes: EventEnvelopes = { glass: 0, clatter: 0, applause: 0, loudness: 0 };
   let lastRoutes: SensoryRoutes = {
     background: 0,
@@ -264,12 +297,23 @@ export async function createSensoryGraph(
   const applyNeuralRouting = () => {
     if (!neural) {
       currentNeuralMix = 0;
+      currentBackgroundMix = 0;
       setParam(neuralDryGain.gain, 1, context, 0.016);
       return;
     }
-    currentNeuralMix = continuousNeuralMix(effective("background-noise"), lastRoutes.background);
-    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.018);
-    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.018);
+
+    currentBackgroundMix = continuousNeuralMix(effective("background-noise"), lastRoutes.background);
+    const alarmMix = alarmStemMix(effective("alarm-siren"), lastRoutes.alarm);
+    const glassMix = stemRouteMix(effective("glass-shatter"), lastRoutes.glass, 1.2);
+    const clatterMix = stemRouteMix(effective("dishes-clatter"), lastRoutes.clatter, 1.05);
+    const applauseMix = stemRouteMix(effective("applause"), lastRoutes.applause, 0.9);
+
+    // Strong foreground nuisance events are now allowed to drive the separator
+    // even when the broad Background Noise toggle is low. This is the key v7
+    // change: alarms/glass no longer depend on generic denoising to sound quiet.
+    currentNeuralMix = Math.max(currentBackgroundMix, alarmMix, glassMix, clatterMix, applauseMix);
+    setParam(neuralWetGain.gain, currentNeuralMix, context, 0.012);
+    setParam(neuralDryGain.gain, 1 - currentNeuralMix, context, 0.012);
   };
 
   const applyDynamicProfile = (stats: FrameStats) => {
@@ -338,11 +382,9 @@ export async function createSensoryGraph(
       loudness: updateEnvelope(envelopes.loudness, loudnessStrength > 0 ? lastRoutes.loudness : 0, 0.70),
     };
 
-    // Foreground routes now take audible ownership. Background neural mixing
-    // backs off before category-specific controls are applied.
     applyNeuralRouting();
 
-    if (effective("background-noise") > 0 && currentNeuralMix > 0.01 && lastRoutes.background >= 0.14) {
+    if (effective("background-noise") > 0 && currentBackgroundMix > 0.01 && lastRoutes.background >= 0.14) {
       maybeEmit("background-noise", lastRoutes.background);
     }
     if (glassStrength > 0 && lastRoutes.glass >= 0.10) {
